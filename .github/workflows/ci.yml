@@ -14,7 +14,13 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
-        django: ["5.0", "5.1", "5.2"]
+        django: ["5.0", "5.1", "5.2", "6.0"]
+        # Django 6.0 dropped Python 3.10 and 3.11 support.
+        exclude:
+          - python: "3.10"
+            django: "6.0"
+          - python: "3.11"
+            django: "6.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -54,10 +60,7 @@ jobs:
       - name: ruff (lint)
         run: poetry run ruff check .
 
-      - name: ruff (format)
-        run: poetry run ruff format --check .
-
-      - name: black
+      - name: black (format)
         run: poetry run black --check .
 
       - name: isort

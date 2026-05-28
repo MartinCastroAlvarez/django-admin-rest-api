@@ -25,8 +25,6 @@ repos:
       - id: ruff
         args: ["--fix", "--exit-non-zero-on-fix"]
         files: ^(django_admin_rest_api|tests)/
-      - id: ruff-format
-        files: ^(django_admin_rest_api|tests)/
 
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 24.8.0

@@ -658,7 +658,9 @@ def test_radio_fields_surface_widget_hint() -> None:
     model_admin = _RadioAdmin(Permission, admin.site)
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="radio-su", email="radio@example.com", password="x"  # noqa: S106
+        username="radio-su",
+        email="radio@example.com",
+        password="x",  # noqa: S106
     )
     form = model_admin.get_form(request, obj=None)()
     obj = Permission()
@@ -705,7 +707,9 @@ def test_raw_id_fields_surface_widget_hint() -> None:
     model_admin = _RawIdAdmin(Permission, admin.site)
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="rawid-su", email="rawid@example.com", password="x"  # noqa: S106
+        username="rawid-su",
+        email="rawid@example.com",
+        password="x",  # noqa: S106
     )
     form = model_admin.get_form(request, obj=None)()
     common = dict(
@@ -742,7 +746,9 @@ def test_formfield_overrides_textarea_promotes_string_to_text() -> None:
 
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="ffo-su", email="ffo@example.com", password="x"  # noqa: S106
+        username="ffo-su",
+        email="ffo@example.com",
+        password="x",  # noqa: S106
     )
 
     def descriptor(model_admin: admin.ModelAdmin) -> dict:
@@ -832,7 +838,9 @@ def test_formfield_overrides_passwordinput_masks_and_redacts() -> None:
 
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="pwd-su", email="pwd@example.com", password="x"  # noqa: S106
+        username="pwd-su",
+        email="pwd@example.com",
+        password="x",  # noqa: S106
     )
 
     def descriptor(model_admin: admin.ModelAdmin) -> dict:

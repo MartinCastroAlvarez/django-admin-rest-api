@@ -538,20 +538,28 @@ def log_deletion(
     has a ``pk`` — ``LogEntry`` stores ``object_id`` + a string repr.
     See :func:`log_addition` for the no-swallow rationale.
 
-    Django changed the API surface between 5.x and 6.x:
+    Django's deletion-logging API surface differs across versions and
+    the shim must span all three states:
 
-    - 5.x had both ``log_deletion(request, obj, object_repr)`` (single)
-      and ``log_deletions(request, queryset)`` (plural).
-    - 6.x kept only ``log_deletions(request, queryset)`` — the singular
-      form was removed.
+    - Django 5.0:        only ``log_deletion(request, obj, object_repr)``
+                         (singular) exists.
+    - Django 5.1 / 5.2:  both ``log_deletion`` (singular) and
+                         ``log_deletions(request, queryset)`` (plural)
+                         exist.
+    - Django 6.0:        only ``log_deletions(request, queryset)``
+                         (plural) exists; the singular form was removed.
 
-    We always use the plural form so the same call works on both. The
-    queryset is derived from the model admin's own ``get_queryset`` so
-    any consumer override (e.g. row-level filters) is respected; we
-    then narrow it to the one object we're about to delete.
+    Prefer ``log_deletions`` (the future-proof name) when available; fall
+    back to ``log_deletion`` only on Django 5.0. The queryset passed to
+    ``log_deletions`` is derived from the model admin's own
+    ``get_queryset(request)`` so any consumer override (e.g. row-level
+    filters) is respected; ``.filter`` is invoked on the QuerySet
+    returned by ``get_queryset`` — not on ``Model.objects`` — so the
+    package's "no objects.all/filter in api/" lint rule does not apply.
     """
-    # ``.filter`` is invoked on the QuerySet returned by
-    # ``get_queryset`` — not on ``Model.objects`` — so the package's
-    # "no objects.all/filter in api/" lint rule does not apply.
-    queryset = model_admin.get_queryset(request).filter(pk=obj.pk)
-    model_admin.log_deletions(request, queryset)
+    if hasattr(model_admin, "log_deletions"):
+        queryset = model_admin.get_queryset(request).filter(pk=obj.pk)
+        model_admin.log_deletions(request, queryset)
+    else:
+        # Django 5.0 fallback: the singular form is the only option.
+        model_admin.log_deletion(request, obj, str(obj))

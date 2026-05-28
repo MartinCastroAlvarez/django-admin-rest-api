@@ -90,9 +90,7 @@ def _serialize_action(entry: LogEntry, admin_site: Any, request: HttpRequest) ->
     }
 
 
-def _target_for(
-    entry: LogEntry, admin_site: Any, request: HttpRequest
-) -> dict[str, Any] | None:
+def _target_for(entry: LogEntry, admin_site: Any, request: HttpRequest) -> dict[str, Any] | None:
     """Change-page locator for the entry's object, or ``None``.
 
     Returns ``None`` for deletions (no live object), for content types

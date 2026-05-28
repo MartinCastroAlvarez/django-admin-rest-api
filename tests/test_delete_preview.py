@@ -34,9 +34,7 @@ def test_non_staff_forbidden(user_client: Client) -> None:
 
 @pytest.mark.django_db
 def test_unregistered_model_not_found(superuser_client: Client) -> None:
-    assert (
-        superuser_client.get("/admin-api/api/v1/auth/nope/1/delete-preview/").status_code == 404
-    )
+    assert superuser_client.get("/admin-api/api/v1/auth/nope/1/delete-preview/").status_code == 404
 
 
 @pytest.mark.django_db

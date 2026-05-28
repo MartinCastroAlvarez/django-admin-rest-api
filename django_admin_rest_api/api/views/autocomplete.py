@@ -91,7 +91,7 @@ class AutocompleteView(View):
 
         if not model_admin.search_fields:
             return bad_request(
-                "The target admin does not declare search_fields; " "autocomplete is not available."
+                "The target admin does not declare search_fields; autocomplete is not available."
             )
 
         q = (request.GET.get("q") or "").strip()
