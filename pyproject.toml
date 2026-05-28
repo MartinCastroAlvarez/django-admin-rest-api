@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-admin-rest-api"
-version = "0.1.0a2"
+version = "1.0.0"
 description = "A JSON REST API for the Django admin — same permissions, same ModelAdmin, no new features. Powers django-admin-react and django-admin-mcp."
 authors = ["django-admin-rest-api contributors"]
 license = "MIT"
@@ -10,7 +10,7 @@ repository = "https://github.com/MartinCastroAlvarez/django-admin-api"
 documentation = "https://github.com/MartinCastroAlvarez/django-admin-api#readme"
 keywords = ["django", "admin", "rest", "api", "json", "headless"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 5.0",
