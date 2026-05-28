@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python }} / Django ${{ matrix.django }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        django: ["5.0", "5.1", "5.2"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction
+          poetry run pip install "django~=${{ matrix.django }}.0"
+
+      - name: Run pytest
+        run: poetry run pytest --no-cov
+
+  lint:
+    name: lint + security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: ruff (lint)
+        run: poetry run ruff check .
+
+      - name: ruff (format)
+        run: poetry run ruff format --check .
+
+      - name: black
+        run: poetry run black --check .
+
+      - name: isort
+        run: poetry run isort --check-only .
+
+      - name: mypy
+        run: poetry run mypy django_admin_rest_api
+
+      - name: bandit
+        run: poetry run bandit -c pyproject.toml -q -r django_admin_rest_api
+
+      - name: pip-audit
+        run: poetry run pip-audit

@@ -1,0 +1,212 @@
+[tool.poetry]
+name = "django-admin-rest-api"
+version = "0.1.0a0"
+description = "A JSON REST API for the Django admin — same permissions, same ModelAdmin, no new features. Powers django-admin-react and django-admin-mcp."
+authors = ["django-admin-rest-api contributors"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/MartinCastroAlvarez/django-admin-api"
+repository = "https://github.com/MartinCastroAlvarez/django-admin-api"
+documentation = "https://github.com/MartinCastroAlvarez/django-admin-api#readme"
+keywords = ["django", "admin", "rest", "api", "json", "headless"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+packages = [{ include = "django_admin_rest_api" }]
+include = [
+    { path = "LICENSE", format = ["sdist", "wheel"] },
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+django = ">=5.0,<7.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.3"
+pytest-django = "^4.8"
+pytest-cov = "^5.0"
+ruff = "^0.6"
+mypy = "^1.10"
+django-stubs = { version = "^5.0", extras = ["compatible-mypy"] }
+bandit = "^1.7"
+pip-audit = "^2.7"
+black = "^26.3.1"
+isort = "^5.13"
+flake8 = "^7.1"
+Flake8-pyproject = "^1.2"
+pylint = "^3.2"
+pylint-django = "^2.5"
+
+[build-system]
+requires = ["poetry-core>=1.6.0"]
+build-backend = "poetry.core.masonry.api"
+
+# --------------------------------------------------------------------------- #
+# Ruff — lint + format
+# --------------------------------------------------------------------------- #
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["tests/test_project/migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",
+    "F",
+    "I",
+    "B",
+    "S",
+    "DJ",
+    "UP",
+    "SIM",
+    "RET",
+    "PIE",
+]
+ignore = [
+    "S101",
+    "DJ001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S106", "S107"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+known-first-party = ["django_admin_rest_api", "tests"]
+
+# --------------------------------------------------------------------------- #
+# Pytest
+# --------------------------------------------------------------------------- #
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.test_project.settings"
+python_files = ["test_*.py", "*_test.py"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=django_admin_rest_api",
+    "--cov-report=term-missing",
+]
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:django.*",
+]
+
+# --------------------------------------------------------------------------- #
+# MyPy
+# --------------------------------------------------------------------------- #
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+plugins = ["mypy_django_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "tests.test_project.settings"
+
+# --------------------------------------------------------------------------- #
+# Black
+# --------------------------------------------------------------------------- #
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = "\\.pyi?$"
+extend-exclude = "tests/test_project/migrations|dist"
+
+# --------------------------------------------------------------------------- #
+# isort
+# --------------------------------------------------------------------------- #
+[tool.isort]
+profile = "black"
+line_length = 100
+force_single_line = true
+known_first_party = ["django_admin_rest_api", "tests"]
+skip_glob = ["tests/test_project/migrations/*", "dist/*"]
+
+# --------------------------------------------------------------------------- #
+# flake8
+# --------------------------------------------------------------------------- #
+[tool.flake8]
+max-line-length = 100
+extend-ignore = [
+    "E203",
+    "E501",
+    "W503",
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "tests/test_project/migrations",
+    "dist",
+    ".venv",
+]
+per-file-ignores = [
+    "tests/*:S101",
+]
+
+# --------------------------------------------------------------------------- #
+# pylint
+# --------------------------------------------------------------------------- #
+[tool.pylint.main]
+load-plugins = ["pylint_django"]
+django-settings-module = "tests.test_project.settings"
+ignore-paths = [
+    "tests/test_project/migrations/.*",
+    "dist/.*",
+]
+
+[tool.pylint."messages control"]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "too-few-public-methods",
+    "import-outside-toplevel",
+    "line-too-long",
+    "fixme",
+    "duplicate-code",
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+# --------------------------------------------------------------------------- #
+# Coverage
+# --------------------------------------------------------------------------- #
+[tool.coverage.run]
+branch = true
+source = ["django_admin_rest_api"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+# --------------------------------------------------------------------------- #
+# Bandit
+# --------------------------------------------------------------------------- #
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "node_modules", "build", "dist"]

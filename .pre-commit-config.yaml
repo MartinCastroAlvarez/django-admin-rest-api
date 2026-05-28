@@ -1,0 +1,86 @@
+# Pre-commit hook configuration for django-admin-rest-api.
+#
+# Install once:
+#   poetry run pip install pre-commit
+#   pre-commit install
+#
+# Then every `git commit` runs these hooks against the staged diff.
+
+repos:
+  # -------------------------------------------------------------------
+  # Secret scanning — fail commit if a token-shaped string is added.
+  # -------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        args: ["protect", "--staged", "--no-banner", "--redact"]
+
+  # -------------------------------------------------------------------
+  # Python formatting + linting.
+  # -------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+        files: ^(django_admin_rest_api|tests)/
+      - id: ruff-format
+        files: ^(django_admin_rest_api|tests)/
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.8.0
+    hooks:
+      - id: black
+        files: ^(django_admin_rest_api|tests)/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        files: ^(django_admin_rest_api|tests)/
+
+  # -------------------------------------------------------------------
+  # Python security lint (bandit).
+  # -------------------------------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "-q", "-r", "django_admin_rest_api"]
+        additional_dependencies: ["bandit[toml]"]
+        pass_filenames: false
+
+  # -------------------------------------------------------------------
+  # House rules — invariants enforced by the security model.
+  # -------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: no-partial-tokens
+        name: No partial token redactions (e.g., ghp_…XYZ)
+        language: pygrep
+        entry: '(ghp_|gho_|ghs_|github_pat_|aws_secret_access_key|AKIA[0-9A-Z]{16}|BEGIN (RSA|EC|OPENSSH) PRIVATE)'
+        types_or: [text]
+        exclude: |
+          (?x)^(
+            SECURITY\.md
+            |\.pre-commit-config\.yaml
+          )$
+
+      - id: no-objects-all-in-api
+        name: No Model.objects.all/filter in django_admin_rest_api/api/
+        language: pygrep
+        entry: 'objects\.(all|filter)\('
+        files: '^django_admin_rest_api/api/.*\.py$'
+
+      - id: no-csrf-exempt
+        name: No @csrf_exempt in django_admin_rest_api/
+        language: pygrep
+        entry: 'csrf_exempt'
+        files: '^django_admin_rest_api/.*\.py$'
+
+      - id: no-user-has-perm
+        name: No user.has_perm in django_admin_rest_api/api/
+        language: pygrep
+        entry: 'user\.has_perm\('
+        files: '^django_admin_rest_api/api/.*\.py$'
