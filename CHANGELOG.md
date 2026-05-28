@@ -5,6 +5,23 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0a1] — 2026-05-28
+
+### Fixed
+- Django 6.0 compatibility for the destroy / bulk-delete code paths
+  (`api/writes.py:log_deletion`). Django 6.0 renamed
+  `ModelAdmin.log_deletion` → `ModelAdmin.log_deletions`; we now
+  prefer the 6.x name when present and fall back to the legacy name.
+  Closes #1.
+- README: the password endpoint row used to claim the URL was
+  `set-password/` with a "set_password permission gate". The actual
+  URL (`api/urls.py:161`) is `password/` and the gate is
+  `has_change_permission` — same as any other change. README updated
+  to match the code (the endpoint itself is unchanged: it is the JSON
+  mirror of Django `UserAdmin`'s password-change page,
+  `AdminPasswordChangeForm` + `AUTH_PASSWORD_VALIDATORS` +
+  `set_password`).
+
 ## [0.1.0a0] — 2026-05-28
 
 Initial pre-alpha extraction of the JSON API from

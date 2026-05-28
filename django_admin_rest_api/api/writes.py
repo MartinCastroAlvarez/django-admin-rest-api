@@ -537,5 +537,21 @@ def log_deletion(
     Must be called **before** ``delete_model`` while the object still
     has a ``pk`` — ``LogEntry`` stores ``object_id`` + a string repr.
     See :func:`log_addition` for the no-swallow rationale.
+
+    Django changed the API surface between 5.x and 6.x:
+
+    - 5.x had both ``log_deletion(request, obj, object_repr)`` (single)
+      and ``log_deletions(request, queryset)`` (plural).
+    - 6.x kept only ``log_deletions(request, queryset)`` — the singular
+      form was removed.
+
+    We always use the plural form so the same call works on both. The
+    queryset is derived from the model admin's own ``get_queryset`` so
+    any consumer override (e.g. row-level filters) is respected; we
+    then narrow it to the one object we're about to delete.
     """
-    model_admin.log_deletion(request, obj, str(obj))
+    # ``.filter`` is invoked on the QuerySet returned by
+    # ``get_queryset`` — not on ``Model.objects`` — so the package's
+    # "no objects.all/filter in api/" lint rule does not apply.
+    queryset = model_admin.get_queryset(request).filter(pk=obj.pk)
+    model_admin.log_deletions(request, queryset)

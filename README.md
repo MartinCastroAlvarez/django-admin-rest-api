@@ -109,7 +109,7 @@ That's it. Your admin is now also a JSON API at `/admin-api/api/v1/...`.
 | `GET`   | `/api/v1/recent-actions/`                      | The dashboard's "Recent Actions" feed                     |
 | `POST`  | `/api/v1/login/`                               | Same `authenticate` + `login` as the HTML admin           |
 | `POST`  | `/api/v1/logout/`                              | Same `logout`                                             |
-| `POST`  | `/api/v1/<app>/<model>/<pk>/set-password/`     | Auth-app `set_password` permission gate (User model)      |
+| `POST`  | `/api/v1/<app>/<model>/<pk>/password/`         | JSON mirror of `UserAdmin`'s password-change page (`AdminPasswordChangeForm` + `AUTH_PASSWORD_VALIDATORS` + `set_password`); 404 unless the model's admin declares `change_password_form`; gated by `has_change_permission` |
 
 Every endpoint enforces the same permission gates as the HTML admin.
 
