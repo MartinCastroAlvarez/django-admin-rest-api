@@ -110,7 +110,7 @@ class UpdateView(View):
         # CSRF is enforced either way (no @csrf_exempt).
         is_multipart = (request.content_type or "").startswith("multipart/form-data")
         if is_multipart:
-            # The SPA submits the full form as multipart, so no PATCH-merge:
+            # The client submits the full form as multipart, so no PATCH-merge:
             # a file field with no new upload and no clear flag keeps its
             # existing file via ClearableFileInput bound to ``instance``.
             inlines_payload = None

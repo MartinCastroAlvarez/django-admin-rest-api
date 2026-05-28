@@ -9,8 +9,9 @@ password hashing, the user model, and the access policy are all
 Django's.
 
 The consumer is responsible for serving the CSRF cookie to anonymous
-users before this endpoint is POSTed to (the React app does this in
-its SPA shell view); this package only owns the auth handshake.
+users before this endpoint is POSTed to (the React SPA shell view
+in ``django-admin-react`` does this); this package only owns the
+auth handshake.
 
 Security properties (each is load-bearing — see the test matrix in
 ``tests/test_auth.py``):

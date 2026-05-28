@@ -5,7 +5,7 @@ Wire contract: ``docs/api-contract.md`` §4.2.
 For each ``InlineModelAdmin`` declared on the parent ``ModelAdmin``,
 the detail response includes a metadata block plus the existing
 child rows. Write support (formset round-trip) is tracked as a
-follow-up — this PR closes the *read* half of #54 so the SPA can
+follow-up — this PR closes the *read* half of #54 so the client can
 render inlines for view-only flows immediately.
 
 Hard rules (`SECURITY.md` §3):
@@ -110,7 +110,7 @@ def _show_change_link_allowed(
     Mirrors ``serialize_fk_value``'s ``to`` gate (#301): only when the child
     model is registered on this admin site **and** the requesting user has
     ``has_view_permission`` for it. Registration alone isn't enough — without
-    the per-user check the SPA would render a link the detail endpoint 404s
+    the per-user check the client would render a link the detail endpoint 404s
     on and leak the adjacency / identity of a model the user can't view
     (extends the #89 registry guard to a per-user check).
     """
@@ -123,7 +123,7 @@ def _show_change_link_allowed(
 
 
 def _inline_kind(inline: InlineModelAdmin) -> str:
-    """Tabular vs stacked layout hint for the SPA.
+    """Tabular vs stacked layout hint for the client.
 
     Classified by the inline's **base class** (``admin.TabularInline``),
     not its subclass *name*. The previous ``"Tabular" in
@@ -148,7 +148,7 @@ def _spec_for_inline(
     Returns ``None`` if the inline can't be resolved cleanly (e.g.
     missing FK back to the parent) so the parent detail keeps
     rendering. The omission is announced via the missing entry
-    rather than a 500 — the SPA still sees the other inlines.
+    rather than a 500 — the client still sees the other inlines.
     """
     child_model = inline.model
     meta = child_model._meta
@@ -179,7 +179,7 @@ def _spec_for_inline(
         "fk_name": fk_name,
         # The child's pk field name (#418): when the pk is an explicit,
         # non-auto field (e.g. a UUIDField) it shows up as an inline
-        # column, and the SPA must render it without ellipsis — the row's
+        # column, and the client must render it without ellipsis — the row's
         # identity must stay fully readable/copyable (mirrors the list
         # ``pk_field`` / #360).
         "pk_field": meta.pk.name,
@@ -191,7 +191,7 @@ def _spec_for_inline(
         "can_add": can_add,
         "can_change": can_change,
         "can_delete": can_delete,
-        # InlineModelAdmin.show_change_link (#384) — when True, the SPA
+        # InlineModelAdmin.show_change_link (#384) — when True, the client
         # renders a per-row link to the child's own change page. Gated on
         # the child being registered **and** the user's per-model
         # has_view_permission (#301 least-disclosure, same gate as
@@ -235,7 +235,7 @@ def _visible_inline_fields(
     Mirrors the top-level detail view's visibility rules:
     ``get_fields`` minus ``get_exclude`` minus sensitive-name
     denylist. The implicit FK back to the parent is excluded — the
-    SPA doesn't need it (it's implied by the inline's nesting).
+    client doesn't need it (it's implied by the inline's nesting).
     """
     declared = list(inline.get_fields(request, parent) or ())
     excluded = set(inline.get_exclude(request, parent) or ())
@@ -260,7 +260,7 @@ def _fields_meta(
     """Per-field metadata for the inline header.
 
     Carries ``type`` + ``required`` (in addition to ``name`` / ``label``
-    / ``readonly``) so the SPA can render a *typed* input per inline
+    / ``readonly``) so the client can render a *typed* input per inline
     field in edit mode — the prerequisite for inline editing (#54
     write-half UI). ``type`` reuses the same closed vocabulary
     (``field_type_for``) the top-level detail descriptor uses, so the
@@ -304,7 +304,7 @@ def _password_redacted_fields(
     Django's admin renders a ``PasswordInput`` with ``render_value=False``
     by default, so a secret kept on a field the inline routes through it
     (typically ``formfield_overrides = {CharField: {"widget":
-    PasswordInput}}``) is never echoed back into the form. The SPA reads
+    PasswordInput}}``) is never echoed back into the form. The client reads
     inline values over the wire, so the equivalent is to drop the value
     from the payload. Detection reads the inline's own bound form widgets
     (the source of truth Django already applied), so ``formfield_overrides``

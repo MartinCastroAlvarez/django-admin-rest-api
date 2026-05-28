@@ -79,7 +79,7 @@ def _serialize_action(entry: LogEntry, admin_site: Any, request: HttpRequest) ->
     (Django stores it on the row), so it is safe to echo back even for a
     now-deleted object. ``target`` is the navigable change-page locator,
     or ``null`` when the object can't be linked (deleted, unregistered
-    model, or no view permission) — the SPA then renders plain text.
+    model, or no view permission) — the client then renders plain text.
     """
     return {
         "id": entry.id,
@@ -98,7 +98,7 @@ def _target_for(
     Returns ``None`` for deletions (no live object), for content types
     whose model can't be resolved, for models not registered on the
     admin site, and when the user lacks module / view permission — so
-    the SPA never offers a link that would 403 or 404.
+    the client never offers a link that would 403 or 404.
     """
     if entry.action_flag == DELETION:
         return None

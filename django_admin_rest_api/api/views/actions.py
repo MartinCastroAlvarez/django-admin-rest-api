@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §5.4.
 
-Powers Django admin's ``actions = [...]`` mechanism for the SPA. The
+Powers Django admin's ``actions = [...]`` mechanism for the client. The
 caller picks an action by name and a list of pks; the package
 re-resolves the action through ``ModelAdmin.get_actions(request)``
 (never trusts the action name client-side), then runs it over the
@@ -52,7 +52,7 @@ class ActionView(View):
     """``POST /api/v1/<app>/<model>/actions/<action_name>/``.
 
     Body: ``{"pks": [<pk>, ...], "confirmed": <bool>}``. ``confirmed``
-    is informational only in v1 — the SPA passes it to indicate the
+    is informational only in v1 — the client passes it to indicate the
     user has acknowledged a confirmation step; the backend doesn't
     short-circuit on it (the action callable owns confirmation
     semantics).
@@ -105,14 +105,14 @@ class ActionView(View):
         if not isinstance(pks, list) or not pks:
             return bad_request("`pks` must be a non-empty list.")
 
-        # The SPA runs its own styled confirm dialog, which stands in
+        # The client runs its own styled confirm dialog, which stands in
         # for Django's intermediate HTML confirmation page. When it
         # reports the user confirmed, signal that to two-phase actions
         # that gate on the admin's ``post`` flag — most importantly the
         # built-in ``delete_selected``, which only deletes (via
         # ``ModelAdmin.delete_queryset``) when ``request.POST['post']``
         # is set and otherwise just renders the confirmation page.
-        # Without this the SPA confirm would no-op: the page would be
+        # Without this the client confirm would no-op: the page would be
         # rendered server-side and nothing deleted.
         if payload.get("confirmed"):
             # ``.copy()`` yields a *mutable* QueryDict; set the flag on it,
@@ -133,7 +133,7 @@ class ActionView(View):
             result = action_callable(model_admin, request, queryset)
 
         # Surface any messages the action queued via
-        # ``ModelAdmin.message_user`` (#442) so the SPA can toast them —
+        # ``ModelAdmin.message_user`` (#442) so the client can toast them —
         # iterating ``get_messages`` consumes them, so they don't also leak
         # into the session for the next page render. ``level_tag`` is
         # Django's "success" / "info" / "warning" / "error" / "debug".
@@ -143,7 +143,7 @@ class ActionView(View):
 
         # Django admin's action contract: the callable may return an
         # ``HttpResponse`` (typically a redirect to a confirmation
-        # page) — we surface that as a JSON envelope so the SPA can
+        # page) — we surface that as a JSON envelope so the client can
         # follow it without parsing HTML.
         if isinstance(result, HttpResponse):
             body: dict[str, Any] = {"redirect": result["Location"]} if "Location" in result else {}
@@ -164,7 +164,7 @@ def actions_payload(model_admin: Any, request: HttpRequest) -> list[dict[str, An
     Each entry is ``{name, label, description, requires_confirmation}``.
     ``requires_confirmation`` is conservative: ``True`` only when the
     action's docstring or short_description hints at destructiveness
-    (substring match on ``delete``). The SPA may always render a
+    (substring match on ``delete``). The client may always render a
     confirmation step regardless — this hint is a UX optimisation.
     """
     raw = model_admin.get_actions(request) or {}
@@ -172,7 +172,7 @@ def actions_payload(model_admin: Any, request: HttpRequest) -> list[dict[str, An
     # `short_description` uses the admin's `%(verbose_name)s` /
     # `%(verbose_name_plural)s` placeholders) ships a *format string*,
     # not a finished label — Django interpolates it at render time via
-    # `model_format_dict(opts)`. Do the same here so the SPA shows
+    # `model_format_dict(opts)`. Do the same here so the client shows
     # "Delete selected files", never the raw "%(verbose_name_plural)s".
     fmt = model_format_dict(model_admin.model._meta)
     out: list[dict[str, Any]] = []

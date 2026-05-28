@@ -1,13 +1,13 @@
 """``GET /api/v1/<app>/<model>/add/`` — the create-form schema.
 
-The detail view (``/<pk>/``) needs an existing object; the SPA's
+The detail view (``/<pk>/``) needs an existing object; the client's
 create page needs the same field descriptors + fieldsets for a *new*
 object. This view builds that payload from an unsaved instance, the
 add form (``get_form(request, obj=None, change=False)`` — exactly how
 Django's add view builds it), and the read-visible field set.
 
 It deliberately reuses the detail view's descriptor builders so the
-field shape is byte-for-byte identical to what edit renders — the SPA
+field shape is byte-for-byte identical to what edit renders — the client
 uses one ``FieldInput`` component for both.
 
 Hard rules: staff gate (rule 1), model resolved through the registry
@@ -119,7 +119,7 @@ class AddFormView(View):
             # Add-view save-flow buttons (#154): obj=None → add semantics
             # (Save / Save-and-add-another / Save-and-continue editing).
             "save_options": save_options(model_admin, request, None),
-            # prepopulated_fields (#245): {target: [sources]} so the SPA can
+            # prepopulated_fields (#245): {target: [sources]} so the client can
             # slugify the target from its sources while typing — Django's
             # add-form behaviour. Restrict to fields actually rendered, and
             # never a readonly target (it can't be filled), mirroring how
@@ -212,7 +212,7 @@ def _prepopulated_payload(
     restricted to fields actually rendered: a target that's readonly or not
     in the form is dropped (it can't be filled), and source names the form
     doesn't render are filtered out. A target left with no usable sources is
-    omitted. The SPA slugifies the target from its sources while typing.
+    omitted. The client slugifies the target from its sources while typing.
     """
     try:
         raw = model_admin.get_prepopulated_fields(request, None) or {}

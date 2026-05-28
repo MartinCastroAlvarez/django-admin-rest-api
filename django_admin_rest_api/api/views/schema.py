@@ -14,7 +14,7 @@ The schema is generated, not hand-written: ``_build_schema()`` walks
 the closed type vocabulary in ``api/serializers.py`` to produce the
 ``components.schemas`` block. Anything documented in
 ``docs/api-contract.md`` is reflected here so a typed client like
-``openapi-typescript`` produces a SPA-ready surface without
+``openapi-typescript`` produces a client-ready surface without
 hand-translating Markdown.
 
 The endpoint is staff-gated (same posture as the rest of the API)
@@ -68,7 +68,8 @@ def _build_schema() -> dict[str, Any]:
             "title": "django-admin-rest-api API",
             "version": SCHEMA_VERSION,
             "description": (
-                "Wire contract between the React SPA and the Django "
+                "Wire contract between any client (the React SPA, the "
+                "MCP server, or any other consumer) and the Django "
                 "backend. Endpoint shapes only — model registry and "
                 "row data are returned by GET /api/v1/{app}/{model}/."
             ),
@@ -238,7 +239,7 @@ def _components() -> dict[str, Any]:
                         "type": "string",
                         "description": (
                             "Name of the model's primary-key field "
-                            "(`model._meta.pk.name`). The SPA pins this column "
+                            "(`model._meta.pk.name`). The client pins this column "
                             "first, never truncates it, and keeps it visible."
                         ),
                     },
@@ -275,7 +276,7 @@ def _components() -> dict[str, Any]:
                             "get_queryset — `show_full_result_count` parity. "
                             "Equals `total` when the list isn't narrowed; "
                             "`null` when `show_full_result_count` is False. "
-                            "The SPA renders 'X of Y' when it differs from total."
+                            "The client renders 'X of Y' when it differs from total."
                         ),
                     },
                     "results": {

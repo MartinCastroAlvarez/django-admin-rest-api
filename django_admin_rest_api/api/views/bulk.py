@@ -2,11 +2,11 @@
 
 Wire contract: ``docs/api-contract.md`` §5.5.
 
-Powers ``list_editable`` and bulk-edit flows (Issue #61). The SPA
+Powers ``list_editable`` and bulk-edit flows (Issue #61). The client
 sends ``{updates: [{pk, fields: {...}}, ...]}`` and the package
 runs each update through ``ModelAdmin.get_form()`` + ``save_model``
 the same way the single-row PATCH does. Per-row errors are returned
-in a uniform envelope so the SPA can show validation errors next to
+in a uniform envelope so the client can show validation errors next to
 the row that failed without losing the rest of the batch.
 
 Hard rules (`SECURITY.md` §3):
@@ -56,7 +56,7 @@ from django_admin_rest_api.api.writes import readonly_or_excluded_names
 from django_admin_rest_api.api.writes import reject_forbidden_keys
 from django_admin_rest_api.api.writes import writable_field_names
 
-# Cap batch size: a single keystroke from a SPA worker should not be
+# Cap batch size: a single keystroke from a client worker should not be
 # able to materialise 10k forms. 200 matches the package-wide
 # ``MAX_PAGE_SIZE`` default so a "save the whole page" workflow fits
 # in one batch.
@@ -102,8 +102,8 @@ class BulkUpdateView(View):
 
         # The atomic wraps the whole batch — any row that fails rolls
         # the entire transaction back. Per-row errors are still
-        # collected and surfaced so the SPA can highlight the failing
-        # rows; the SPA decides whether to retry the batch with the
+        # collected and surfaced so the client can highlight the failing
+        # rows; the client decides whether to retry the batch with the
         # failures dropped.
         with transaction.atomic():
             sid = transaction.savepoint()

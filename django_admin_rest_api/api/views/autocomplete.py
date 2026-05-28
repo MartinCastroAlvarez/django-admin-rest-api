@@ -18,7 +18,7 @@ gate:
 3. ``ModelAdmin.search_fields`` — 400 if the target admin doesn't
    declare any (autocomplete requires search). The admin's own UI
    raises ``ImproperlyConfigured`` in the same case; the API
-   surfaces it as a 400 so the SPA can show "this FK isn't
+   surfaces it as a 400 so the client can show "this FK isn't
    autocompletable" inline.
 4. ``ModelAdmin.get_search_results(request, qs, q)`` — the actual
    search; the package never re-implements search semantics.

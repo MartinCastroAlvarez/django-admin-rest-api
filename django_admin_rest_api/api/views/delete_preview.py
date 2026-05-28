@@ -4,7 +4,7 @@ Wire contract: ``docs/api-contract.md`` §5.3 (delete preview sub-resource).
 
 Django's HTML admin shows a confirmation interstitial before a delete:
 what cascades, what's protected, what extra permissions are needed. The
-SPA's Delete button should open the same preview before invoking the
+client's Delete button should open the same preview before invoking the
 DELETE endpoint — otherwise a single click can silently cascade-delete
 related rows the operator never saw. Parity (#153).
 

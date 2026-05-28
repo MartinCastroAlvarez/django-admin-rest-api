@@ -9,7 +9,7 @@ endpoint:
    response.
 2. Reads ``?year=`` / ``?month=`` / ``?day=`` query params and
    narrows the queryset to that date window.
-3. Returns ``buckets`` — the next-level drill-down counts the SPA
+3. Returns ``buckets`` — the next-level drill-down counts the client
    needs to render the admin's year → month → day strip.
 
 Hard rules (`SECURITY.md` §3):
@@ -76,7 +76,7 @@ def parse_active(request: HttpRequest) -> dict[str, int | None]:
     """Extract the ``{year, month, day}`` selection from the query string.
 
     Returns a dict with each key either an ``int`` or ``None``. The
-    SPA passes the active drill-down as plain query params:
+    client passes the active drill-down as plain query params:
     ``?year=2025``, ``?year=2025&month=10``, etc. Children of a
     ``None`` ancestor are dropped — e.g., ``?month=10`` without a
     year is meaningless and becomes ``{year: None, month: None}``.

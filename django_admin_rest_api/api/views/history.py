@@ -5,7 +5,7 @@ Wire contract: ``docs/api-contract.md`` §4 (history sub-resource).
 Surfaces the ``django.contrib.admin.models.LogEntry`` timeline for a
 single object — the same data the legacy admin's *History* button
 shows. Parity (#155): a Django dev's audit trail must be reachable
-from the SPA, and the entries the SPA itself writes (via the create /
+from the client, and the entries the client itself writes (via the create /
 update / delete endpoints, which call ``ModelAdmin.log_*``) show up
 here alongside any earlier HTML-admin entries.
 
@@ -111,7 +111,7 @@ def _serialize_entry(entry: LogEntry) -> dict[str, Any]:
 
     ``change_message_human`` is Django's own rendered summary
     (``get_change_message``); ``change_message_structured`` is the raw
-    JSON list so a SPA can render field-level detail without re-parsing
+    JSON list so a client can render field-level detail without re-parsing
     the prose.
     """
     user = entry.user

@@ -87,7 +87,7 @@ class InlineValidationError(Exception):
 def _inline_name(inline: InlineModelAdmin, parent: Model) -> str:
     """The identifier the read half emits for this inline.
 
-    Must match ``inlines.py``'s ``_spec_for_inline`` so the SPA can echo
+    Must match ``inlines.py``'s ``_spec_for_inline`` so the client can echo
     the same key back on write. Kept in one place would be ideal; this
     mirrors the read-half computation deliberately and the
     ``test_inline_write_name_matches_read`` regression pins them

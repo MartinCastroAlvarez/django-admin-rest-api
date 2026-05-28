@@ -271,7 +271,7 @@ def readonly_or_excluded_names(
     ``"Field 'x' is read-only."`` instead of the generic
     ``"Unknown field 'x'."`` when the admin marks a field as
     readonly or excluded. Both responses are 400 per contract §5;
-    the distinction is a UX courtesy for the SPA.
+    the distinction is a UX courtesy for the client.
     """
     excluded = set(model_admin.get_exclude(request, obj) or ())
     readonly = set(model_admin.get_readonly_fields(request, obj) or ())
@@ -328,7 +328,7 @@ def coerce_fk_values(
 
     Clients that echo the read shape back would otherwise hit a
     form-validation error. Recognizing the envelope on input keeps
-    the SPA's edit-in-place flow honest without weakening
+    the client's edit-in-place flow honest without weakening
     validation — Django will still reject any pk that does not
     resolve to a real related row.
     """
@@ -499,7 +499,7 @@ def log_addition(
     the entry is byte-identical to what ``django.contrib.admin`` writes
     on a create through its own views. Parity: a Django dev's audit
     trail (the per-object History view) must not have holes just because
-    the write came through the SPA instead of the legacy admin.
+    the write came through the client instead of the legacy admin.
 
     Not wrapped in try/except: if ``LogEntry`` cannot be written (e.g.
     the admin app's migrations are absent), that is a real

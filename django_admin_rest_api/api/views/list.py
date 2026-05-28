@@ -127,7 +127,7 @@ class ListView(View):
 
         # ``show_full_result_count`` parity (#311): when the list is
         # narrowed (search / list_filter / date_hierarchy), surface the
-        # unfiltered base count so the SPA can show "X of Y". Honour
+        # unfiltered base count so the client can show "X of Y". Honour
         # ``ModelAdmin.show_full_result_count`` (default True) — Django's
         # opt-out for tables where the extra COUNT(*) is too expensive,
         # in which case we send ``null``. When the view isn't narrowed the
@@ -174,7 +174,7 @@ class ListView(View):
         body: dict[str, Any] = {
             "app_label": model._meta.app_label,
             # ``model_name`` stays lowercase (Django convention; used in URLs).
-            # The SPA should render ``verbose_name_plural`` for list view
+            # The client should render ``verbose_name_plural`` for list view
             # titles, falling back to ``object_name`` when the consumer
             # has not customised ``Meta.verbose_name``. Lowercased
             # ``model_name`` was previously the only signal, which is
@@ -185,19 +185,19 @@ class ListView(View):
             "object_name": model._meta.object_name,
             "verbose_name": str(model._meta.verbose_name),
             "verbose_name_plural": str(model._meta.verbose_name_plural),
-            # Name of the primary-key field (usually ``id``). The SPA uses
+            # Name of the primary-key field (usually ``id``). The client uses
             # it to identify the pk column among ``columns`` so it can pin
             # it first, never truncate it, and keep it from being hidden —
             # the pk is the row's identity and must always be readable in
             # full. May or may not appear in ``list_display``; when it
-            # doesn't, the SPA simply has nothing to pin.
+            # doesn't, the client simply has nothing to pin.
             "pk_field": model._meta.pk.name,
             "permissions": model_permissions(model_admin, request),
             "columns": columns,
             # list_display_links (#251): the column name(s) that link to the
             # detail page — ``ModelAdmin.get_list_display_links`` (defaults to
             # the first column; ``[]`` when the admin set
-            # ``list_display_links = None`` to disable linking). The SPA links
+            # ``list_display_links = None`` to disable linking). The client links
             # exactly these columns. Callable list_display entries are dropped
             # (only string column names round-trip).
             "list_display_links": [
@@ -215,15 +215,15 @@ class ListView(View):
             "page_size": page_size,
             "total": total,
             # Unfiltered base count when the list is narrowed (else == total);
-            # ``null`` when ``show_full_result_count`` is False. The SPA shows
+            # ``null`` when ``show_full_result_count`` is False. The client shows
             # "<total> of <full_count>" when they differ (#311).
             "full_count": full_count,
-            # ``ModelAdmin.list_max_show_all`` (default 200): the SPA offers a
+            # ``ModelAdmin.list_max_show_all`` (default 200): the client offers a
             # "Show all N" control only when ``total`` is at/below this cap,
             # matching Django's changelist (#385).
             "list_max_show_all": list_max_show_all,
             # empty_value_display (#251): the admin's placeholder for empty
-            # cells (ModelAdmin override → AdminSite default "-"), so the SPA
+            # cells (ModelAdmin override → AdminSite default "-"), so the client
             # renders it instead of a hardcoded em-dash.
             "empty_value_display": str(model_admin.get_empty_value_display()),
             "results": results,
@@ -260,7 +260,7 @@ def _default_page_size(model_admin: ModelAdmin) -> int:
 
     Derived from ``ModelAdmin.list_per_page`` so the source of truth is the
     admin (Rule #1), matching Django's changelist — a consumer who set
-    ``list_per_page`` for the HTML admin gets the same page size in the SPA
+    ``list_per_page`` for the HTML admin gets the same page size in the client
     with no extra setting. Falls back to ``conf.DEFAULT_PAGE_SIZE`` only when
     ``list_per_page`` is missing/invalid, and is capped at ``MAX_PAGE_SIZE``
     so the per-request DoS ceiling still holds (a consumer wanting a bigger
@@ -345,15 +345,15 @@ def _columns_payload(
 
     Each entry has ``{name, label, sortable, editable}`` plus a
     ``type`` (the closed v1 field vocabulary) whenever the column maps
-    to a concrete model field — so the SPA can format ``datetime`` /
+    to a concrete model field — so the client can format ``datetime`` /
     ``date`` / ``time`` cells for display instead of dumping raw ISO
     (#413). ``list_display`` callables / display methods have no field
-    and so carry no ``type``; the SPA falls back to the plain string.
+    and so carry no ``type``; the client falls back to the plain string.
     Labels resolve through Django's ``label_for_field`` so
     admin-customised labels (verbose name, ``short_description``, etc.)
     are honored.
     ``editable`` is derived from ``ModelAdmin.list_editable`` — the
-    SPA renders the cell as an in-place editor when ``True`` and
+    client renders the cell as an in-place editor when ``True`` and
     submits changes via the bulk PATCH endpoint (Issue #61). The
     ``except`` fallback to the bare name is defensive — corrupt
     admin registrations should never 500 the endpoint.
@@ -380,7 +380,7 @@ def _columns_payload(
         }
         # Only concrete model fields carry a type; a ``list_display``
         # callable / display method resolves to ``None`` and the key is
-        # omitted (the SPA then renders the value as a plain string).
+        # omitted (the client then renders the value as a plain string).
         field = safe_get_field(model_admin.model, name) if isinstance(name, str) else None
         if field is not None:
             entry["type"] = field_type_for(field)
