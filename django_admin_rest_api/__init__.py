@@ -15,4 +15,4 @@ See ``README.md`` for the install + URL wiring, and
 ``docs/api-contract.md`` (in the repo) for the wire shape.
 """
 
-__version__ = "0.1.0a0"
+__version__ = "0.1.0a1"
