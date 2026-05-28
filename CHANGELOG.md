@@ -5,6 +5,27 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-05-28
+
+### Fixed
+- **Django 5.0 compatibility.** The 1.0.0 shim for `log_deletion`
+  assumed `ModelAdmin.log_deletions` (plural) existed on every
+  supported Django, but Django 5.0 only ships the singular
+  `log_deletion`. The shim now uses `hasattr` to prefer the plural
+  form (5.1+) and falls back to the singular form on 5.0.
+
+### Changed
+- **CI matrix expanded to Django 6.0.** The job now runs the cross
+  product of Python 3.10–3.13 × Django 5.0–6.0, excluding the two
+  cells Django 6.0 itself does not support (py3.10/3.11).
+- **`ruff format` removed from the CI lint job and the pre-commit
+  config.** `ruff format` and `black` disagreed on a handful of
+  multi-line `assert` cases, so the lint job would fail no matter
+  which formatter ran last. `black` is now the single source of
+  truth for formatting; `ruff` keeps its `check` (lint) role.
+- Re-formatted 9 test files + 1 source file (`api/views/recent_actions.py`)
+  to match `black`.
+
 ## [1.0.0] — 2026-05-28
 
 First stable release.

@@ -375,7 +375,9 @@ def test_inline_passwordinput_field_value_is_redacted() -> None:
 
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="inline-pwd-su", email="pwd@example.com", password="x"  # noqa: S106
+        username="inline-pwd-su",
+        email="pwd@example.com",
+        password="x",  # noqa: S106
     )
 
     class _MaskedInline(TabularInline):
@@ -420,7 +422,9 @@ def test_inline_passwordinput_render_value_true_preserves_value() -> None:
 
     request = RequestFactory().get("/")
     request.user = get_user_model().objects.create_superuser(
-        username="inline-echo-su", email="echo@example.com", password="x"  # noqa: S106
+        username="inline-echo-su",
+        email="echo@example.com",
+        password="x",  # noqa: S106
     )
 
     class _EchoInline(TabularInline):

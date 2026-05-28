@@ -88,7 +88,9 @@ def test_returns_own_actions_newest_first(superuser_client: Client) -> None:
 def test_excludes_other_users_actions(superuser_client: Client) -> None:
     """A user sees only their own action log — never anyone else's."""
     other = get_user_model().objects.create_superuser(
-        username="other", email="other@example.com", password="x"  # noqa: S106
+        username="other",
+        email="other@example.com",
+        password="x",  # noqa: S106
     )
     g = Group.objects.create(name="g")
     _log(other, g, action=CHANGE)
