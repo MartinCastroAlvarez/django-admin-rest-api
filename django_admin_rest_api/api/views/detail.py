@@ -136,7 +136,7 @@ def _build_payload(
         "view_on_site_url": _view_on_site_url(model_admin, obj),
         # empty_value_display (#251): the admin's configured placeholder for
         # empty/null values (ModelAdmin override → AdminSite default "-"), so
-        # the SPA renders it instead of a hardcoded em-dash. ``str()`` keeps
+        # the client renders it instead of a hardcoded em-dash. ``str()`` keeps
         # it a plain string on the wire (it's a SafeString in Django).
         "empty_value_display": str(model_admin.get_empty_value_display()),
     }
@@ -207,7 +207,7 @@ def _fieldsets_payload(
 
     Fieldset entries that the admin lists but the visibility filter
     drops are silently removed from the group. An empty result is
-    returned as the single "default" group so the SPA always has at
+    returned as the single "default" group so the client always has at
     least one section to render.
     """
     try:
@@ -239,7 +239,7 @@ def _fieldsets_payload(
         fields = [sub for row in field_rows for sub in row]
         if fields:
             # Carry the fieldset's ``classes`` (e.g. ``collapse`` / ``wide``)
-            # and ``description`` so the SPA can render a collapsible section
+            # and ``description`` so the client can render a collapsible section
             # and show the section help text (Django change-form parity).
             classes = [str(c) for c in (opts.get("classes") or ())]
             description = opts.get("description")
@@ -352,7 +352,7 @@ def _descriptor_for(
         value=value,
     )
     # radio_fields (#251): when the admin lists this choice/FK field in
-    # ``radio_fields``, hint the SPA to render radios instead of a select.
+    # ``radio_fields``, hint the client to render radios instead of a select.
     # Presentational only — no permission/value change.
     if name in (getattr(model_admin, "radio_fields", None) or {}):
         descriptor["widget"] = "radio"
@@ -364,12 +364,12 @@ def _descriptor_for(
     # formfield_overrides (#446): the bound form field's widget already
     # reflects the admin's ``formfield_overrides`` /
     # ``formfield_for_dbfield`` — Django applied them in ``get_form``.
-    # Honour the one override the SPA can act on with the existing type
+    # Honour the one override the client can act on with the existing type
     # vocabulary: a single-line string promoted to a ``Textarea`` becomes
     # the multi-line ``text`` type (rendered as a ``<textarea>``), and a
     # multi-line ``text`` forced to a single-line ``TextInput`` collapses
     # back to ``string``. Other widget overrides (date pickers, FK
-    # autocomplete) the SPA already renders from the field type. Choice
+    # autocomplete) the client already renders from the field type. Choice
     # fields are untouched — their ``choice`` type wins above.
     _apply_widget_override(descriptor, form_field)
     return descriptor
@@ -385,10 +385,10 @@ def _apply_widget_override(descriptor: dict[str, Any], form_field: Any) -> None:
     A ``PasswordInput`` override is handled first and separately (#504):
     it is a security boundary, not a layout hint. Django's admin renders
     a ``PasswordInput`` with ``render_value=False`` by default, so the
-    stored value is never echoed back into the page. The SPA reads its
+    stored value is never echoed back into the page. The client reads its
     value over the wire, so the equivalent is to **redact the value from
     the payload** unless the admin explicitly opted into echoing it
-    (``render_value=True``), and to hint the SPA to mask the input
+    (``render_value=True``), and to hint the client to mask the input
     (``widget: "password"``). Without this, a secret stored on a
     ``CharField`` the admin masked with ``PasswordInput`` would be sent
     as plaintext in the detail JSON.

@@ -66,7 +66,7 @@ def serialize_value(value: Any, field: Field | None = None) -> Any:
     ``register_field_type`` with a custom serializer, that serializer
     runs *instead of* the default Python-type dispatch below. This is
     the consumer extension point for custom field types whose
-    ``str(value)`` representation is not the wire form the SPA wants.
+    ``str(value)`` representation is not the wire form the client wants.
     """
     if field is not None:
         custom = _registered_serializer(field)
@@ -78,7 +78,7 @@ def serialize_value(value: Any, field: Field | None = None) -> Any:
     # ``ModelAdmin`` ``list_display`` method (or a readonly display
     # method) opts a value into being rendered as HTML in Django's own
     # changelist. We mirror that: emit a typed ``{"html": ...}``
-    # envelope so the SPA renders it as markup. A *plain* ``str`` —
+    # envelope so the client renders it as markup. A *plain* ``str`` —
     # e.g. a ``CharField`` containing ``"<script>"`` — is NOT a
     # ``SafeString`` and stays inert text (rendered escaped by React).
     # Trust boundary is identical to Django's: the admin author marked
@@ -106,7 +106,7 @@ def serialize_value(value: Any, field: Field | None = None) -> Any:
         return str(value)
     if isinstance(value, bytes | bytearray | memoryview):
         # BinaryField values: base64-encode for JSON safety. The wire
-        # contract documents this so the SPA knows to decode.
+        # contract documents this so the client knows to decode.
         return base64.b64encode(bytes(value)).decode("ascii")
     if isinstance(value, list | tuple):
         # PostgreSQL ArrayField, plain Python lists from custom getters.
@@ -169,7 +169,7 @@ def _serialize_range_value(value: Any, field: Field | None) -> dict[str, Any]:
          "empty": true   // only when value is None}
 
     ``subtype`` derives from the field's Django internal type so the
-    SPA can pick the right inner widget (date vs. datetime vs.
+    client can pick the right inner widget (date vs. datetime vs.
     number); without a ``field`` hint we fall back to the generic
     ``"range"`` label that ``field_type_for`` already uses for the
     type-mapping. ``bounds`` is reconstructed from ``lower_inc`` /
@@ -206,7 +206,7 @@ def serialize_fk_value(
 
     When ``admin_site`` is provided **and** the related model is
     registered on it, the envelope also carries
-    ``to: {"app_label": <real>, "model_name": ...}`` so the SPA can
+    ``to: {"app_label": <real>, "model_name": ...}`` so the client can
     render the cell as a navigable link to the related object's detail
     page (#184). The target is **omitted** when the related model isn't
     registered — surfacing a link the detail endpoint would 404 on (and
@@ -326,7 +326,7 @@ _TYPE_BY_INTERNAL: Final[dict[str, str]] = {
 # Extension surface: consumers register a custom field type via
 # ``register_field_type`` (see below). Both maps are checked *after*
 # the closed v1 vocabulary so a consumer cannot accidentally redefine
-# a builtin type and surprise the SPA. The custom registry is
+# a builtin type and surprise the client. The custom registry is
 # distinct from ``_TYPE_BY_INTERNAL`` so an audit of the closed
 # vocabulary stays trivial.
 _CUSTOM_TYPE_BY_INTERNAL: dict[str, str] = {}
@@ -355,15 +355,15 @@ def register_field_type(
 
     ``internal_type`` is what ``field.get_internal_type()`` returns —
     typically the class name. ``vocab_type`` is the wire-type label
-    the SPA branches on; reuse one of the existing labels
-    (``string``, ``integer``, ``json``, ``array``, …) so the SPA can
+    the client branches on; reuse one of the existing labels
+    (``string``, ``integer``, ``json``, ``array``, …) so the client can
     render it without code changes, or coin a new label and ship a
     matching frontend widget via the extension surface.
 
     Builtin types in ``_TYPE_BY_INTERNAL`` cannot be redefined — calling
     this on a builtin internal type silently no-ops. That's
     intentional: a third-party app shouldn't be able to change how the
-    SPA renders ``CharField`` for every consumer.
+    client renders ``CharField`` for every consumer.
 
     ``serializer``, if provided, runs *instead of* the default
     ``serialize_value`` for instances of this field. Use it when
@@ -393,7 +393,7 @@ def field_type_for(field: Field) -> str:
        isinstance check is the only way to distinguish).
     3. The closed vocabulary in ``_TYPE_BY_INTERNAL``.
     4. Custom types registered via ``register_field_type``.
-    5. ``"unsupported"`` — the SPA renders a read-only label.
+    5. ``"unsupported"`` — the client renders a read-only label.
     """
     if isinstance(field, ManyToManyField):
         return "manytomany"
@@ -444,11 +444,11 @@ def field_metadata(
         "value": value,
     }
     if isinstance(field, ForeignKey | ManyToManyField):
-        # FK and M2M both reference a related model. The SPA uses
+        # FK and M2M both reference a related model. The client uses
         # ``to`` to wire autocomplete (#59) and to render the FK/M2M
         # picker. For M2M-with-through-extras the field stays
         # readonly via writable_field_names; ``to`` still points at
-        # the target so the SPA can render the existing labels.
+        # the target so the client can render the existing labels.
         related = field.related_model
         # ``related_model`` is the resolved model class by the time the
         # admin is loaded; the ``"self"`` sentinel only exists during

@@ -95,7 +95,7 @@ def _user_payload(request: HttpRequest) -> dict:
     Exposes only data the user already knows about themselves: pk,
     username, display name, ``is_staff``, ``is_superuser``. No email,
     no group memberships, no permission codenames, no last-login
-    timestamp — the SPA does not need them and the registry endpoint
+    timestamp — the client does not need them and the registry endpoint
     must stay deny-by-default (``SECURITY.md`` §3 rule 12).
 
     ``getattr(user, "is_active", False)`` style defaults are used so
@@ -155,7 +155,7 @@ def build_registry_payload(admin_site: AdminSite, request: HttpRequest) -> dict:
       installed Django apps (i.e. the consumer coined it inside their
       override); ``False`` otherwise.
     - ``models``: per-model entries, each carrying ``real_app_label``
-      (the underlying ``model._meta.app_label``) so the SPA can
+      (the underlying ``model._meta.app_label``) so the client can
       construct URLs as ``<mount>/api/v1/<real_app_label>/<model_name>/``
       regardless of how the group was labelled.
 
@@ -187,7 +187,7 @@ def build_registry_payload(admin_site: AdminSite, request: HttpRequest) -> dict:
             # Django's ``get_app_list`` includes a model when the user
             # has *any* perm on it (view OR add OR change OR delete) —
             # the HTML admin's sidebar carries the entry even if the
-            # list view would 403. For the SPA the registry IS the nav
+            # list view would 403. For the client the registry IS the nav
             # surface, so a model without view permission would just
             # render as a broken tile (the list endpoint returns 403).
             # Apply the same per-model ``has_view_permission`` gate the
@@ -233,7 +233,7 @@ def _app_verbose_name(app_label: str) -> str:
 # package. Resolving a per-app endpoint against any of these
 # ``app_label`` values would either shadow the package's own view
 # (if Django's URL resolver order favors the literal route, which it
-# does) or, worse, surface a consumer model whose URL the SPA can
+# does) or, worse, surface a consumer model whose URL the client can
 # never reach. Treat the segment as reserved and 404 instead — same
 # posture as an unregistered model. Closes issue #93.
 RESERVED_APP_LABELS: frozenset[str] = frozenset(
@@ -259,7 +259,7 @@ def resolve_model(
     ``session``), the resolution returns ``None`` even when a
     consumer happens to register a Django app with that label. The
     package's own view wins the URL route; surfacing the consumer's
-    model would only confuse the SPA.
+    model would only confuse the client.
 
     Returns ``None`` if the model is not registered or the request is not
     permitted to view it. The caller must convert that to a 404, per
@@ -303,8 +303,8 @@ def save_options(
     We compute the flags from ``ModelAdmin`` permission methods +
     ``ModelAdmin.save_as`` rather than rendering the admin template, so
     the package never depends on the admin template context. The flag
-    set is the source of truth for which buttons the SPA renders; the
-    SPA never invents a save routing the backend wouldn't allow.
+    set is the source of truth for which buttons the client renders; the
+    client never invents a save routing the backend wouldn't allow.
 
     Returned keys (all booleans):
 
@@ -314,13 +314,13 @@ def save_options(
     - ``show_save_as_new`` — "Save as new" (change view only, and only
       when ``ModelAdmin.save_as`` is True).
     - ``save_as`` — the raw ``ModelAdmin.save_as`` flag, surfaced so the
-      SPA knows whether a "Save as new" POST creates a fresh object.
+      client knows whether a "Save as new" POST creates a fresh object.
     - ``save_as_continue`` — the raw ``ModelAdmin.save_as_continue``
-      flag (default True): after a "Save as new", whether the SPA
+      flag (default True): after a "Save as new", whether the client
       lands on the new object's change view (True) or the changelist
       (False).
     - ``save_on_top`` — the raw ``ModelAdmin.save_on_top`` flag (default
-      False): when True, the SPA mirrors the save-button row at the top
+      False): when True, the client mirrors the save-button row at the top
       of the form too, matching Django's change-form layout (#251).
       Purely presentational — button visibility is unchanged.
 
@@ -386,7 +386,7 @@ def password_change_meta(
 
     ``supported`` is ``True`` only when the admin exposes a password-change
     form **and** the request holds change permission on the object — so the
-    SPA shows "Set password" exactly when the POST would be accepted, never
+    client shows "Set password" exactly when the POST would be accepted, never
     a button that 403s. No password material is ever surfaced here; this is
     purely a capability flag (the field itself stays hidden by the
     sensitive-name denylist).

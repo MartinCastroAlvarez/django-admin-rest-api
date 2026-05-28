@@ -199,7 +199,7 @@ def _redirect_for(
     model_name: str,
     pk: Any,
 ) -> str:
-    """Construct a SPA-relative redirect (``<mount>/<app>/<model>/<pk>/``).
+    """Construct a client-relative redirect (``<mount>/<app>/<model>/<pk>/``).
 
     The mount is reconstructed from the request path. The URL pattern
     is fixed inside this package, so everything in front of

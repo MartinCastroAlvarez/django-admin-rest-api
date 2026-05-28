@@ -8,13 +8,13 @@ The package's default permission gate is:
 Per-operation gates always go through the relevant
 ``ModelAdmin.has_*_permission(request, obj=None)`` method.
 
-403 responses come in two flavours so the SPA can distinguish "you were
+403 responses come in two flavours so the client can distinguish "you were
 never authenticated" from "your session expired" (Issue #63):
 
-- ``error.code = "forbidden"`` — generic permission denial; the SPA
+- ``error.code = "forbidden"`` — generic permission denial; the client
   redirects to the configured login URL.
 - ``error.code = "session_expired"`` — the request carried a session
-  cookie but the resolved user is anonymous; the SPA shows a re-login
+  cookie but the resolved user is anonymous; the client shows a re-login
   modal that returns the user to the same page after sign-in.
 
 See ``SECURITY.md`` §3 (rules 1 and 12) for the contract this enforces
@@ -97,7 +97,7 @@ def is_session_expired(request: HttpRequest) -> bool:
     it inspects the cookie name in ``settings.SESSION_COOKIE_NAME``
     and the resolved ``request.user`` only. Defensive fallback to
     ``False`` if any attribute is missing — the worst case is the
-    SPA gets the generic ``"forbidden"`` envelope and falls back to
+    client gets the generic ``"forbidden"`` envelope and falls back to
     its normal login-redirect path.
     """
     cookie_name = getattr(settings, "SESSION_COOKIE_NAME", "sessionid")
@@ -114,7 +114,7 @@ def forbidden_response(request: HttpRequest | None = None) -> HttpResponse:
     When ``request`` is provided and ``is_session_expired(request)``
     returns ``True`` (the request carried a session cookie but the
     user is anonymous), the body uses the ``session_expired`` error
-    code so the SPA can render a re-login modal instead of a hard
+    code so the client can render a re-login modal instead of a hard
     redirect. Without the argument, or when no expiry signal is
     detected, the body is the generic ``forbidden`` envelope.
 

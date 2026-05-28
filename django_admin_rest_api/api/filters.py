@@ -5,19 +5,19 @@ Wire contract: ``docs/api-contract.md`` §3.3.
 When a ``ModelAdmin`` declares ``list_filter = (...)``, the list
 endpoint:
 
-1. Surfaces the filter metadata (`filters: [...]`) so the SPA can
+1. Surfaces the filter metadata (`filters: [...]`) so the client can
    render the left-sidebar filter strip.
 2. Reads per-filter query params and narrows the queryset accordingly.
 
 Supported filter types in v1:
 
 - **`SimpleListFilter` subclass** — the filter's own ``parameter_name``
-  + ``lookups(request, model_admin)`` drive the SPA's options;
+  + ``lookups(request, model_admin)`` drive the client's options;
   ``queryset(request, qs)`` does the narrowing.
 - **Boolean field** — three-way: ``true`` / ``false`` / unset.
 - **Field with choices** — one option per choice.
 - **ForeignKey** — small target tables only (≤ 25 rows per PM ruling).
-  The SPA fetches choices via the existing list endpoint when needed.
+  The client fetches choices via the existing list endpoint when needed.
 - **DateField / DateTimeField** — the date_hierarchy strip (Issue #62)
   handles the heavy case; ``list_filter`` on a date field is surfaced
   as ``{type: "date"}`` but defers detailed date-range UX to a follow-up.
@@ -151,7 +151,7 @@ def _spec_for_fk(
     """Build the metadata block for an FK filter.
 
     Returns ``None`` (i.e. drop the descriptor) when the related model
-    is **not registered** with the admin site — the SPA's FK picker
+    is **not registered** with the admin site — the client's FK picker
     would otherwise 404 on the related list endpoint, and the bare
     ``to: {app_label, model_name}`` discloses the existence of an
     unregistered model (see issue #89, defense-in-depth).
@@ -165,7 +165,7 @@ def _spec_for_fk(
     meta = related._meta
     # #89: drop the descriptor entirely if the related model isn't in
     # the configured admin site. This keeps the closed-vocabulary
-    # posture tight (the SPA only learns about FK filters it can
+    # posture tight (the client only learns about FK filters it can
     # actually populate) and removes one information-disclosure rung.
     if admin_site is not None and related not in admin_site._registry:
         return None
@@ -202,7 +202,7 @@ def _spec_for_fk(
             {"value": obj.pk, "label": label_for(obj)} for obj in base_qs[:_FK_FILTER_MAX_OPTIONS]
         ]
     elif admin_site is not None:
-        # High-cardinality target (#282): don't inline; hint the SPA to use
+        # High-cardinality target (#282): don't inline; hint the client to use
         # the autocomplete endpoint for this filter — but only when the
         # target admin declares ``search_fields`` (autocomplete 400s
         # otherwise). The endpoint is already staff-gated and runs the
@@ -237,7 +237,7 @@ def _spec_for_simple_filter(
     # ``SimpleListFilter.value()``. Crucially this includes a *default*
     # the filter applies when no querystring param is present (a common
     # "exclude test tenants unless opted in" pattern): such a filter
-    # returns its default from ``value()``, so the SPA can reflect the
+    # returns its default from ``value()``, so the client can reflect the
     # default as selected instead of showing "All" while the backend
     # silently narrows the rows (#283). ``None`` means no selection.
     try:
@@ -262,7 +262,7 @@ def filters_payload(
 
     Empty list when the admin doesn't declare ``list_filter`` or no
     entry resolves to a supported type. The block is always present
-    (empty `[]`) so the SPA can branch on `filters.length` without
+    (empty `[]`) so the client can branch on `filters.length` without
     `if "filters" in response`.
 
     Defense-in-depth (issues #88, #89):
@@ -309,7 +309,7 @@ def filters_payload(
             continue
 
         # Resolve a plain field OR a related-field path (#440). The
-        # descriptor `name` stays the full path so the SPA round-trips
+        # descriptor `name` stays the full path so the client round-trips
         # `?<path>=<value>` and the ORM filters natively.
         field = _resolve_field_path(model, field_name)
         if field is None:
@@ -345,7 +345,7 @@ def apply_filters(queryset: QuerySet, model_admin: ModelAdmin, request: HttpRequ
     For field-based entries, the param name is the field name and the
     value is the raw lookup. Unknown / garbage values fall through to
     Django's ORM — if the value can't be coerced, the queryset
-    returns no rows (correct posture; the SPA should rely on the
+    returns no rows (correct posture; the client should rely on the
     metadata to show only valid options).
     """
     raw = list(model_admin.get_list_filter(request) or ())
@@ -405,7 +405,7 @@ def apply_filters(queryset: QuerySet, model_admin: ModelAdmin, request: HttpRequ
                 continue
         except Exception:
             # Garbage value that broke the ORM — narrow to zero
-            # rows rather than 500. The SPA sees an empty result set
+            # rows rather than 500. The client sees an empty result set
             # and the metadata block tells it the value was bad.
             return queryset.none()
 

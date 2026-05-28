@@ -5,6 +5,23 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0a2] — 2026-05-28
+
+### Changed
+- Made API docstrings frontend-agnostic. The package was extracted
+  from `django-admin-react`, so 105 docstring / inline-comment
+  references used the word "SPA" (the React single-page app) when
+  describing what the consumer of the API does with the response.
+  Now that the package is the wire surface for *any* client (the
+  React SPA, the forthcoming MCP server, or any other consumer),
+  those comments use the generic term "client". Two callouts
+  (`api/views/schema.py`, `api/views/auth.py`) name the React SPA
+  + MCP server explicitly where the original phrasing referenced a
+  React-specific concept. Closes #2.
+
+### Behavior
+- No behavior change. Comments / docstrings only.
+
 ## [0.1.0a1] — 2026-05-28
 
 ### Fixed
