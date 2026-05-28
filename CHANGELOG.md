@@ -5,6 +5,21 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-05-28
+
+### Infrastructure
+- **PyPI publishing now runs through GitHub Actions.** A new
+  `.github/workflows/release.yml` triggers on `v*` tag push, rebuilds
+  the sdist + wheel from the tagged source, and uploads via twine in
+  a `pypi` GitHub Environment. Every release from now on appears in
+  the repo's Deployments tab and inherits the environment's
+  protection rules. The `PYPI_API_TOKEN` secret lives in the
+  environment, not at the repo level, so PR runs from forks cannot
+  read it.
+
+### Behavior
+- No code change. The package surface and tests are identical to 1.0.1.
+
 ## [1.0.1] — 2026-05-28
 
 ### Fixed
