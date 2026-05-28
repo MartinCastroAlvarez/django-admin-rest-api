@@ -6,8 +6,8 @@ adding the app to ``INSTALLED_APPS`` does not require a settings entry.
 
 Usage in package code:
 
-    from django_admin_rest_api.conf import settings
-    settings.MAX_PAGE_SIZE
+    from django_admin_rest_api import conf
+    conf.MAX_PAGE_SIZE
 
 Nothing in the package should read ``django.conf.settings.DJANGO_ADMIN_REST_API``
 directly — go through this module so defaults are consistent.
@@ -70,7 +70,7 @@ _cached: _PackageSettings | None = None
 
 def __getattr__(name: str) -> Any:  # pragma: no cover — thin shim
     """Module-level ``__getattr__`` (PEP 562) so callers can write
-    ``from django_admin_rest_api.conf import settings`` or
+    ``from django_admin_rest_api import conf`` and then
     ``conf.MAX_PAGE_SIZE`` without a separate accessor.
     """
     global _cached
