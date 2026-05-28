@@ -5,6 +5,32 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] — 2026-05-28
+
+First stable release.
+
+The JSON wire contract is now stable. Subsequent changes that rename,
+remove, or change the shape of any field, status code, or URL pattern
+will require a major version bump (semver).
+
+### Carried-over from 0.1.0a0 – 0.1.0a2
+- Full JSON REST API surface over `ModelAdmin`: registry, schema,
+  list / detail / create / update / destroy, bulk-update,
+  delete-preview, autocomplete, actions, history, recent-actions,
+  login / logout, password.
+- 520 tests, green on Django 5.0 / 5.1 / 5.2 / 6.0 and Python 3.10 – 3.13.
+- Same lint + security tooling as the upstream React repo: ruff,
+  black, isort, flake8, pylint, mypy, bandit, pip-audit, gitleaks,
+  plus pygrep house rules (no `@csrf_exempt`, no
+  `Model.objects.all/filter` in `api/`, no `user.has_perm` in
+  `api/`).
+- Plug-and-play install (one `INSTALLED_APPS` entry, one `urls.py`
+  include).
+
+### Compatibility
+- Python 3.10 – 3.13
+- Django 5.0 – 6.0
+
 ## [0.1.0a2] — 2026-05-28
 
 ### Changed
