@@ -68,7 +68,8 @@ def some_user(db):  # noqa: ARG001 — db forces DB setup
 # Detail descriptor                                                           #
 # --------------------------------------------------------------------------- #
 def test_detail_object_actions_empty_when_admin_has_no_change_actions(
-    superuser_client: Client, some_user,
+    superuser_client: Client,
+    some_user,
 ) -> None:
     """The 99% case: admins that don't use django-object-actions return
     an empty list. No behaviour change for them (#603 backwards-compat)."""
@@ -79,7 +80,8 @@ def test_detail_object_actions_empty_when_admin_has_no_change_actions(
 
 
 def test_detail_object_actions_surfaces_change_actions(
-    superuser_client: Client, some_user,
+    superuser_client: Client,
+    some_user,
 ) -> None:
     """When the admin exposes `get_change_actions`, each name is
     serialised as `{name, label, description}` for the SPA to render
@@ -125,7 +127,8 @@ def test_run_object_action_non_staff_403(user_client: Client, some_user) -> None
 
 
 def test_run_object_action_unknown_name_404(
-    superuser_client: Client, some_user,
+    superuser_client: Client,
+    some_user,
 ) -> None:
     """Unknown action name → 404 (never trust the URL — the admin's
     `get_change_actions` is the source of truth)."""
@@ -141,7 +144,8 @@ def test_run_object_action_unknown_name_404(
 
 
 def test_run_object_action_runs_and_returns_envelope(
-    superuser_client: Client, some_user,
+    superuser_client: Client,
+    some_user,
 ) -> None:
     """A permitted action runs and the JSON envelope reports
     `{ok: true, action: <name>, pk: <pk>}`."""
@@ -167,7 +171,8 @@ def test_run_object_action_runs_and_returns_envelope(
 
 
 def test_run_object_action_redirect_surfaces_in_envelope(
-    superuser_client: Client, some_user,
+    superuser_client: Client,
+    some_user,
 ) -> None:
     """If the action returns an HttpResponse with a Location, the
     envelope surfaces `redirect` so the SPA can follow it without

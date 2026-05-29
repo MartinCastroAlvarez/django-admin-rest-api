@@ -122,9 +122,7 @@ class ObjectActionView(View):
         # or an intermediate form). Surface it as a JSON envelope the
         # SPA can follow without parsing HTML.
         if isinstance(result, HttpResponse):
-            body: dict[str, Any] = (
-                {"redirect": result["Location"]} if "Location" in result else {}
-            )
+            body: dict[str, Any] = {"redirect": result["Location"]} if "Location" in result else {}
             body.update({"ok": True, "action": name, "messages": messages})
             response = JsonResponse(body, status=200)
         else:

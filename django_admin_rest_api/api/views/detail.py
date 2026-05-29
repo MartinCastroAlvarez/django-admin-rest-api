@@ -192,9 +192,11 @@ def object_actions_payload(
         callable_attr = getattr(model_admin, name, None)
         if callable_attr is None:
             continue
-        label = getattr(callable_attr, "label", None) or getattr(
-            callable_attr, "short_description", None
-        ) or name.replace("_", " ").title()
+        label = (
+            getattr(callable_attr, "label", None)
+            or getattr(callable_attr, "short_description", None)
+            or name.replace("_", " ").title()
+        )
         description = getattr(callable_attr, "short_description", "") or ""
         out.append({"name": name, "label": str(label), "description": str(description)})
     return out
