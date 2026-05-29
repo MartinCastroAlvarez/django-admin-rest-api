@@ -45,7 +45,13 @@ not by this library:
   exactly once and exactly the same way.
 - ⚙️ **Actions** — the action registry comes from
   `ModelAdmin.get_actions(request)`. Your custom action functions run
-  unmodified.
+  unmodified. **One declaration, two surfaces:** the signature of each
+  action's third parameter chooses where it shows up in the SPA — a
+  `queryset` (or `QuerySet`-annotated) param surfaces it on the
+  changelist; an `obj_id` / `pk` / `id` param (or a `str`/`int`/`Model`
+  annotation) surfaces it on the single-object detail page. No
+  third-party dependency, no separate declaration list. See
+  [⚙️ Configuration](#%EF%B8%8F-configuration) below.
 - 🔎 **Search & filters** — search uses
   `ModelAdmin.get_search_results(request, queryset, term)`; filters
   use `ModelAdmin.list_filter`. No parallel implementation.
@@ -105,7 +111,7 @@ That's it. Your admin is now also a JSON API at `/admin-api/api/v1/...`.
 | `POST`  | `/api/v1/<app>/<model>/bulk-update/`           | Bulk patch                                                |
 | `POST`  | `/api/v1/<app>/<model>/delete-preview/`        | Cascade preview (like the HTML admin's confirm page)      |
 | `GET`   | `/api/v1/<app>/<model>/autocomplete/?q=…`      | `ModelAdmin.autocomplete_fields` source                   |
-| `POST`  | `/api/v1/<app>/<model>/actions/`               | Run a `ModelAdmin` action on a selection                  |
+| `POST`  | `/api/v1/<app>/<model>/actions/<name>/`        | Run a `ModelAdmin` action; one endpoint serves both shapes (batch / detail) — the runner inspects the callable's signature and either passes the user-narrowed `QuerySet` or `str(pk)` for the single selected row |
 | `GET`   | `/api/v1/<app>/<model>/<pk>/history/`          | The `LogEntry` history for one object                     |
 | `GET`   | `/api/v1/recent-actions/`                      | The dashboard's "Recent Actions" feed                     |
 | `POST`  | `/api/v1/login/`                               | Same `authenticate` + `login` as the HTML admin           |
@@ -157,6 +163,48 @@ DJANGO_ADMIN_REST_API = {
     "ENABLE_PROFILING": False,
 }
 ```
+
+---
+
+## ⚡ Actions: one declaration, two surfaces
+
+Declare your actions exactly the way Django docs tell you to —
+`@admin.action(description="…")` plus `actions = [...]` on your
+`ModelAdmin`. The API surfaces each one in the registry, list, and
+detail responses with a `target` field the SPA reads to decide
+which surface to render it on:
+
+```python
+from django.contrib import admin
+from django.db.models import QuerySet
+
+
+@admin.register(MyModel)
+class MyAdmin(admin.ModelAdmin):
+    actions = ["reprocess_batch", "reprocess_one"]
+
+    @admin.action(description="Reprocess selected")
+    def reprocess_batch(self, request, queryset: QuerySet):
+        # Shows up on the CHANGELIST (multi-select).  target=batch
+        # The runner passes the user-narrowed queryset.
+        ...
+
+    @admin.action(description="Reprocess this one")
+    def reprocess_one(self, request, obj_id: str):
+        # Shows up on the DETAIL page only.            target=detail
+        # The runner passes str(pk) for the row in view.
+        ...
+```
+
+Both actions reach the same endpoint
+(`POST /api/v1/<app>/<model>/actions/<name>/`). The runner inspects the
+callable's third parameter — its **name** (`queryset` / `obj_id` / `pk`
+/ `id` / …) and its **type annotation** (`QuerySet` / `str` / `int` /
+`Model` subclass) — and dispatches to the right shape.
+
+Permissions stay the same (`has_change_permission` per object). No
+`django-object-actions`, no parallel declaration list, no new
+configuration.
 
 ---
 
