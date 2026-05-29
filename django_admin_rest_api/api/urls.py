@@ -32,6 +32,7 @@ from django_admin_rest_api.api.views.destroy import DestroyView
 from django_admin_rest_api.api.views.detail import DetailView
 from django_admin_rest_api.api.views.history import HistoryView
 from django_admin_rest_api.api.views.list import ListView
+from django_admin_rest_api.api.views.object_actions import ObjectActionView
 from django_admin_rest_api.api.views.password import SetPasswordView
 from django_admin_rest_api.api.views.recent_actions import RecentActionsView
 from django_admin_rest_api.api.views.registry import RegistryView
@@ -161,6 +162,17 @@ urlpatterns: list = [
         "<str:app_label>/<str:model_name>/<str:pk>/password/",
         SetPasswordView.as_view(),
         name="set_password",
+    ),
+    # Per-object action runner (#603) — the `django-object-actions` /
+    # `change_actions` extension point. Same ordering caveat: literal
+    # `action` segment must precede the `<pk>` instance route below
+    # so the `/action/<name>/` tail isn't swallowed as part of `<pk>`.
+    # The descriptor list is exposed by the detail endpoint as
+    # `data.object_actions`; this view runs them.
+    path(
+        "<str:app_label>/<str:model_name>/<str:pk>/action/<str:name>/",
+        ObjectActionView.as_view(),
+        name="object_action",
     ),
     path(
         "<str:app_label>/<str:model_name>/<str:pk>/",

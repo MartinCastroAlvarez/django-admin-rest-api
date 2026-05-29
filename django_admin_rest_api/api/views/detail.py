@@ -134,12 +134,72 @@ def _build_payload(
         "fields": _fields_payload(model, model_admin, obj, request, visible_names, admin_site),
         "inlines": inlines_payload(model_admin, obj, request, admin_site),
         "view_on_site_url": _view_on_site_url(model_admin, obj),
+        # Per-object actions (#603) — the `django-object-actions` /
+        # `change_actions = [...]` extension point. Duck-typed: we
+        # check for `get_change_actions` rather than importing the
+        # library, so consumers who don't use it pay nothing and
+        # admins who do (via any other mechanism that exposes the
+        # same shape) work out of the box.
+        "object_actions": object_actions_payload(model_admin, request, obj),
         # empty_value_display (#251): the admin's configured placeholder for
         # empty/null values (ModelAdmin override → AdminSite default "-"), so
         # the client renders it instead of a hardcoded em-dash. ``str()`` keeps
         # it a plain string on the wire (it's a SafeString in Django).
         "empty_value_display": str(model_admin.get_empty_value_display()),
     }
+
+
+def object_actions_payload(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    obj: Model,
+) -> list[dict[str, Any]]:
+    """Serialize the admin's per-object actions (#603).
+
+    The `django-object-actions` extension point exposes a list of
+    method names via `ModelAdmin.get_change_actions(request, object_id,
+    form_url)`; each name resolves to a callable with `(self, request,
+    obj)` signature. We duck-type for that method instead of importing
+    the library so:
+
+    1. The package stays free of a runtime dep on a specific
+       third-party extension.
+    2. Admins that expose `get_change_actions` via any other mechanism
+       (a custom mixin, a wrapper) work without configuration.
+    3. Admins that don't use this surface return an empty list and
+       the SPA renders no buttons — zero overhead for the 99% path.
+
+    Each entry on the wire is `{name, label, description}`. The label
+    comes from the callable's `.label` attribute (set by
+    `django_object_actions.action(label=...)`), with `.short_description`
+    or the method name as the fallback.
+    """
+    get_change_actions = getattr(model_admin, "get_change_actions", None)
+    if not callable(get_change_actions):
+        return []
+    # The django-object-actions signature is `(request, object_id,
+    # form_url)`; pass `str(obj.pk)` + empty form_url. Any exception
+    # in the admin's own filtering must not 500 the detail endpoint —
+    # degrade to an empty action list (the SPA will show no buttons,
+    # the user can still fall back to the legacy admin via the
+    # experience-toggle strip).
+    try:
+        names = list(get_change_actions(request, str(obj.pk), "") or [])
+    except Exception:
+        return []
+    out: list[dict[str, Any]] = []
+    for name in names:
+        callable_attr = getattr(model_admin, name, None)
+        if callable_attr is None:
+            continue
+        label = (
+            getattr(callable_attr, "label", None)
+            or getattr(callable_attr, "short_description", None)
+            or name.replace("_", " ").title()
+        )
+        description = getattr(callable_attr, "short_description", "") or ""
+        out.append({"name": name, "label": str(label), "description": str(description)})
+    return out
 
 
 def _view_on_site_url(model_admin: ModelAdmin, obj: Model) -> str | None:

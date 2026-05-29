@@ -5,6 +5,43 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-05-29
+
+### Added
+- **Per-object action runner.** New endpoint
+  `POST /api/v1/<app>/<model>/<pk>/action/<name>/` runs one
+  `django-object-actions`-style change-page action against a single
+  object, mirroring the legacy admin's per-object action surface.
+  Action discovery is duck-typed on
+  `ModelAdmin.get_change_actions(request, object_id, form_url)`, so
+  the package stays free of a runtime dep on a specific third-party
+  extension; admins exposing the same shape via any other mechanism
+  work without configuration.
+- **Descriptor on the detail response.** The detail endpoint
+  (`GET /api/v1/<app>/<model>/<pk>/`) now includes an
+  `object_actions: [{name, label, description}, ...]` field so a
+  client can render one button per action. Empty list for admins
+  that don't expose `get_change_actions` — zero overhead for the
+  99% path.
+
+### Behavior parity with the HTML admin
+- The runner gates on `is_admin_user` + per-object
+  `has_change_permission` (same as every other change-shaped
+  endpoint). Object resolves through `ModelAdmin.get_queryset(request)`,
+  so an action can never reach a row the user couldn't already see.
+- Action name re-validation: the URL path's `<name>` must appear in
+  the admin's own `get_change_actions(...)` list for the resolved
+  user + object, not just exist as a method. Prevents URL-poking
+  past a `get_change_actions`-based row-level filter.
+- Messages queued by the action via `ModelAdmin.message_user` are
+  drained into the response envelope (`messages: [{level, message}]`)
+  so the client can toast them without parsing HTML.
+- An action returning an `HttpResponse` (e.g. a redirect to a
+  confirmation page) surfaces as `{redirect: "<url>"}` in the
+  envelope.
+- Runs inside a transaction so a raise rolls the mutation back
+  cleanly — same posture as the changelist actions view.
+
 ## [1.0.2] — 2026-05-28
 
 ### Infrastructure
