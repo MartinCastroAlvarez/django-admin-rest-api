@@ -5,6 +5,34 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] — 2026-05-29
+
+### Removed
+- **Reverted the `object_actions` / `django-object-actions` integration
+  shipped in 1.0.3** (#603, revised). The wrong choice: actions belong
+  to Django's stock `ModelAdmin.actions` API, not to a third-party
+  extension point. Consumers should not have to declare actions twice
+  (once on `actions`, once on `change_actions`) just to make the
+  React detail page show buttons.
+
+### Added
+- **`actions` on every model in the registry response.** The registry
+  endpoint now ships, per model, the list of actions Django's
+  `ModelAdmin.get_actions(request)` returns — the same shape the list
+  response has long exposed (`{name, label, description,
+  requires_confirmation}`). One source of truth: declare the action
+  on your `ModelAdmin` once, see it in the registry, the list
+  response, and the detail response.
+- **`object_actions` on the detail response now sources from the same
+  `ModelAdmin.actions` list.** A consumer's detail-page button clicks
+  POST to the existing changelist runner
+  (`/api/v1/<app>/<model>/actions/<name>/`) with `pks=[<this pk>]`.
+  No new endpoint, no `django-object-actions` dependency.
+
+### Behavior
+- No new endpoints; the per-object runner URL added in 1.0.3 has been
+  removed (it was never released as a stable surface).
+
 ## [1.0.3] — 2026-05-29
 
 ### Added
