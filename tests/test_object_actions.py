@@ -1,23 +1,23 @@
-"""Tests for the per-object action runner + descriptor (#603).
+"""Tests for ``data.object_actions`` on the detail response (#603, revised).
 
-The companion descriptor list is exposed on the detail response as
-``data.object_actions``; the POST runner lives at
-``<app>/<model>/<pk>/action/<name>/``. Both are driven by
-``ModelAdmin.get_change_actions`` (the ``django-object-actions``
-extension point) — duck-typed, so this test stubs that method
-directly on the ``UserAdmin`` rather than depending on the third-party
-package.
+The detail-page action surface is sourced from the consumer's standard
+``ModelAdmin.actions`` — the same actions Django admin renders on the
+changelist with multi-select. No `django-object-actions` integration,
+no `change_actions = [...]` redeclaration: one place to declare an
+action, two places it shows up. The descriptor shape matches the
+list response's ``data.actions`` block by design — the SPA renders
+the same buttons on both surfaces, and clicks reuse the same
+``<app>/<model>/actions/<name>/`` runner with ``pks=[<this pk>]``.
 
 Covered:
 
-- Detail response surfaces ``object_actions`` when the admin exposes
-  ``get_change_actions`` returning a non-empty list.
-- Detail response returns an empty list when the admin doesn't expose
-  the method (the 99% case — no behavioural change for those admins).
-- POST runner: anonymous → 403, non-staff → 403, unknown action name
-  → 404, permitted action runs and returns the JSON envelope.
-- Action callable that raises an `HttpResponseRedirect` surfaces
-  ``redirect`` in the response body.
+- Detail response surfaces ``object_actions`` when the admin declares
+  ``actions = [...]``. The descriptor shape matches the list
+  response's ``actions`` block.
+- ``object_actions`` is always present (possibly empty) so the SPA
+  can branch on length without a ``hasOwnProperty`` check.
+- Django's default ``delete_selected`` action surfaces with the
+  interpolated label (no raw ``%(verbose_name_plural)s``).
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ from contextlib import suppress
 import pytest
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.http import HttpResponseRedirect
 from django.test import Client
 
 User = get_user_model()
@@ -64,131 +63,71 @@ def some_user(db):  # noqa: ARG001 — db forces DB setup
     )
 
 
-# --------------------------------------------------------------------------- #
-# Detail descriptor                                                           #
-# --------------------------------------------------------------------------- #
-def test_detail_object_actions_empty_when_admin_has_no_change_actions(
+def test_detail_object_actions_always_present(
     superuser_client: Client,
     some_user,
 ) -> None:
-    """The 99% case: admins that don't use django-object-actions return
-    an empty list. No behaviour change for them (#603 backwards-compat)."""
+    """``object_actions`` is in every detail response, even when the
+    admin has no custom actions (Django admin's default
+    ``delete_selected`` is always permitted for a superuser, so the
+    list is never empty for a superuser — but the field is present
+    regardless, so the SPA can render conditionally without a
+    ``hasOwnProperty`` guard)."""
     response = superuser_client.get(f"{DETAIL_BASE}{some_user.pk}/")
     assert response.status_code == 200
     body = response.json()
-    assert body.get("object_actions") == []
+    assert "object_actions" in body
+    assert isinstance(body["object_actions"], list)
 
 
-def test_detail_object_actions_surfaces_change_actions(
+def test_detail_object_actions_includes_admin_action_decorated_method(
     superuser_client: Client,
     some_user,
 ) -> None:
-    """When the admin exposes `get_change_actions`, each name is
-    serialised as `{name, label, description}` for the SPA to render
-    (#603)."""
+    """A ``ModelAdmin`` with a custom ``@admin.action``-decorated method
+    in ``actions = [...]`` surfaces on the detail page's
+    ``object_actions`` — same descriptor shape as the list response's
+    ``actions`` block."""
 
-    # Set as INSTANCE attrs via admin_attr: Python doesn't auto-bind
-    # instance attributes, so the signature drops `self`.
-    def my_action(request, obj):  # noqa: ARG001
+    def reconcile(model_admin, request, queryset):  # noqa: ARG001
         return None
 
-    my_action.label = "Run the thing"
-    my_action.short_description = "Runs the thing on this user"
+    reconcile.short_description = "Mark as reconciled"
 
-    def get_change_actions(request, object_id, form_url):  # noqa: ARG001
-        return ["my_action"]
+    # Set as INSTANCE attr via admin_attr: Python doesn't auto-bind
+    # instance attributes, so the signature drops `self`.
+    def fake_get_actions(request):  # noqa: ARG001
+        return {
+            "reconcile": (reconcile, "reconcile", "Mark as reconciled"),
+        }
 
-    with admin_attr(User, my_action=my_action, get_change_actions=get_change_actions):
+    with admin_attr(User, get_actions=fake_get_actions):
         response = superuser_client.get(f"{DETAIL_BASE}{some_user.pk}/")
         body = response.json()
-        assert body["object_actions"] == [
-            {
-                "name": "my_action",
-                "label": "Run the thing",
-                "description": "Runs the thing on this user",
-            }
-        ]
+        names = [a["name"] for a in body["object_actions"]]
+        assert "reconcile" in names
+        entry = next(a for a in body["object_actions"] if a["name"] == "reconcile")
+        # Same shape as the list response — `label`, `description`,
+        # `requires_confirmation`.
+        assert entry["label"] == "Mark as reconciled"
+        assert entry["description"] == "Mark as reconciled"
+        assert entry["requires_confirmation"] is False
 
 
-# --------------------------------------------------------------------------- #
-# Runner                                                                      #
-# --------------------------------------------------------------------------- #
-def test_run_object_action_anonymous_403(anon_client: Client, some_user) -> None:
-    """Auth gate matches the rest of the surface (`SECURITY.md` §3
-    Rule 1) — anonymous gets 403, never reaches the admin."""
-    response = anon_client.post(f"{DETAIL_BASE}{some_user.pk}/action/my_action/")
-    assert response.status_code == 403
-
-
-def test_run_object_action_non_staff_403(user_client: Client, some_user) -> None:
-    """Non-staff gets 403 even with a session."""
-    response = user_client.post(f"{DETAIL_BASE}{some_user.pk}/action/my_action/")
-    assert response.status_code == 403
-
-
-def test_run_object_action_unknown_name_404(
+def test_detail_object_actions_interpolates_delete_selected_label(
     superuser_client: Client,
     some_user,
 ) -> None:
-    """Unknown action name → 404 (never trust the URL — the admin's
-    `get_change_actions` is the source of truth)."""
-
-    def get_change_actions(request, object_id, form_url):  # noqa: ARG001
-        return ["a_known_one"]
-
-    with admin_attr(User, get_change_actions=get_change_actions):
-        response = superuser_client.post(
-            f"{DETAIL_BASE}{some_user.pk}/action/something_else/",
-        )
-        assert response.status_code == 404
-
-
-def test_run_object_action_runs_and_returns_envelope(
-    superuser_client: Client,
-    some_user,
-) -> None:
-    """A permitted action runs and the JSON envelope reports
-    `{ok: true, action: <name>, pk: <pk>}`."""
-    calls: list = []
-
-    def my_action(request, obj):  # noqa: ARG001
-        calls.append(obj.pk)
-        return
-
-    def get_change_actions(request, object_id, form_url):  # noqa: ARG001
-        return ["my_action"]
-
-    with admin_attr(User, my_action=my_action, get_change_actions=get_change_actions):
-        response = superuser_client.post(
-            f"{DETAIL_BASE}{some_user.pk}/action/my_action/",
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert body["ok"] is True
-        assert body["action"] == "my_action"
-        assert body["pk"] == str(some_user.pk)
-        assert calls == [some_user.pk]
-
-
-def test_run_object_action_redirect_surfaces_in_envelope(
-    superuser_client: Client,
-    some_user,
-) -> None:
-    """If the action returns an HttpResponse with a Location, the
-    envelope surfaces `redirect` so the SPA can follow it without
-    parsing HTML (#603, same shape as the changelist runner)."""
-
-    def my_action(request, obj):  # noqa: ARG001
-        return HttpResponseRedirect("/admin/auth/user/2/some-flow/")
-
-    def get_change_actions(request, object_id, form_url):  # noqa: ARG001
-        return ["my_action"]
-
-    with admin_attr(User, my_action=my_action, get_change_actions=get_change_actions):
-        response = superuser_client.post(
-            f"{DETAIL_BASE}{some_user.pk}/action/my_action/",
-        )
-        assert response.status_code == 200
-        body = response.json()
-        assert body["ok"] is True
-        assert body["redirect"] == "/admin/auth/user/2/some-flow/"
+    """Django's default ``delete_selected`` action uses a format string
+    label (``Delete selected %(verbose_name_plural)s``). The descriptor
+    interpolates it — same posture as the list response — so the SPA
+    shows ``Delete selected users``, not the raw template."""
+    response = superuser_client.get(f"{DETAIL_BASE}{some_user.pk}/")
+    body = response.json()
+    delete_entries = [a for a in body["object_actions"] if a["name"] == "delete_selected"]
+    if delete_entries:
+        entry = delete_entries[0]
+        assert "%(verbose_name_plural)s" not in entry["label"]
+        # "delete" hint → conservative requires_confirmation = True
+        # (parity with the list-side actions_payload).
+        assert entry["requires_confirmation"] is True

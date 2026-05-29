@@ -204,6 +204,92 @@ def test_response_does_not_leak_password_field_names(superuser_client: Client) -
         assert substring not in body.lower(), substring
 
 
+# --------------------------------------------------------------------------- #
+# `actions` block (per-model, sourced from ModelAdmin.get_actions)             #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_registry_models_carry_actions_list(superuser_client: Client) -> None:
+    """Every model entry exposes an ``actions`` list (may be empty)."""
+    body = superuser_client.get(REGISTRY_URL).json()
+    for app in body["apps"]:
+        for model_entry in app["models"]:
+            assert "actions" in model_entry, f"missing for {model_entry['model_name']}"
+            assert isinstance(model_entry["actions"], list)
+
+
+@pytest.mark.django_db
+def test_registry_actions_include_default_delete_selected(superuser_client: Client) -> None:
+    """The stock ``delete_selected`` shows up for a registered model whose
+    admin doesn't override the actions list — verified against
+    ``auth.user`` and ``auth.group``, both managed by Django defaults."""
+    body = superuser_client.get(REGISTRY_URL).json()
+    auth = next(a for a in body["apps"] if a["app_label"] == "auth")
+    for model_name in ("user", "group"):
+        entry = next(m for m in auth["models"] if m["model_name"] == model_name)
+        action_names = {a["name"] for a in entry["actions"]}
+        assert (
+            "delete_selected" in action_names
+        ), f"{model_name} should expose delete_selected; got {action_names}"
+
+
+@pytest.mark.django_db
+def test_registry_action_descriptor_shape(superuser_client: Client) -> None:
+    """Each action entry has the same shape the list endpoint exposes:
+    ``{name, label, description, requires_confirmation}``."""
+    body = superuser_client.get(REGISTRY_URL).json()
+    auth = next(a for a in body["apps"] if a["app_label"] == "auth")
+    group = next(m for m in auth["models"] if m["model_name"] == "group")
+    for action in group["actions"]:
+        assert set(action.keys()) == {"name", "label", "description", "requires_confirmation"}
+        assert isinstance(action["name"], str) and action["name"]
+        assert isinstance(action["label"], str) and action["label"]
+        assert isinstance(action["requires_confirmation"], bool)
+
+
+@pytest.mark.django_db
+def test_registry_action_label_interpolated_not_raw_format_string(superuser_client: Client) -> None:
+    """``delete_selected``'s ``%(verbose_name_plural)s`` placeholder is
+    interpolated against the model meta — the client must never see the
+    raw format string."""
+    body = superuser_client.get(REGISTRY_URL).json()
+    auth = next(a for a in body["apps"] if a["app_label"] == "auth")
+    user = next(m for m in auth["models"] if m["model_name"] == "user")
+    delete = next(a for a in user["actions"] if a["name"] == "delete_selected")
+    assert "%(verbose_name_plural)s" not in delete["label"]
+    # The model is "user", so the interpolated label should mention
+    # "users" (case-insensitive) — guards against the verbose_name_plural
+    # being dropped entirely.
+    assert "user" in delete["label"].lower()
+
+
+@pytest.mark.django_db
+def test_registry_custom_action_surfaces(superuser_client: Client) -> None:
+    """A custom ``@admin.action(description=...)`` declared on the
+    registered ModelAdmin's ``actions`` list shows up on the registry
+    payload — proving the no-new-config path."""
+
+    def archive_selected(modeladmin, request, queryset):  # noqa: ARG001
+        return None
+
+    archive_selected.short_description = "Archive the chosen %(verbose_name_plural)s"
+
+    # Inject the action via Django's stock `actions = [...]` attribute
+    # (the same way any consumer's ModelAdmin would declare one).
+    group_admin = admin.site._registry[Group]
+    original_actions = group_admin.actions
+    try:
+        group_admin.actions = [archive_selected]
+        body = superuser_client.get(REGISTRY_URL).json()
+    finally:
+        group_admin.actions = original_actions
+
+    auth = next(a for a in body["apps"] if a["app_label"] == "auth")
+    group = next(m for m in auth["models"] if m["model_name"] == "group")
+    archive = next((a for a in group["actions"] if a["name"] == "archive_selected"), None)
+    assert archive is not None, [a["name"] for a in group["actions"]]
+    assert "groups" in archive["label"].lower(), archive["label"]
+
+
 @pytest.mark.django_db
 def test_url_resolves_via_reverse(superuser_client: Client) -> None:
     """The named URL pattern is the source of truth, not the literal string."""

@@ -73,11 +73,24 @@ def _model_permissions(model_admin: ModelAdmin, request: HttpRequest) -> dict[st
 def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpRequest) -> dict:
     """Single ``models[]`` element for the registry response.
 
-    Wire shape is documented in ``docs/api-contract.md`` §2. Only
-    metadata + the four ``has_*_permission`` booleans go on the wire;
-    no model field schemas, no row counts — those are detail/list
-    endpoint responsibilities.
+    Wire shape is documented in ``docs/api-contract.md`` §2. The entry
+    carries enough metadata for a client to render the model in its
+    navigation AND to render the per-model action buttons (changelist
+    + change-page) without making any further API call before the user
+    has selected rows.
+
+    The ``actions`` list comes straight from
+    ``ModelAdmin.get_actions(request)`` — Django's own changelist
+    action API. No parallel definition, no third-party hook; if an
+    admin declares ``actions = [...]`` (or
+    ``@admin.action(description=...)``) the client sees it here.
+    Each entry mirrors the shape the list response exposes:
+    ``{name, label, description, requires_confirmation}``.
     """
+    # Local import to break a registry ↔ actions cycle (the actions
+    # view imports `get_admin_site` from this module).
+    from django_admin_rest_api.api.views.actions import actions_payload
+
     meta = model._meta
     return {
         "app_label": meta.app_label,
@@ -86,6 +99,7 @@ def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpReque
         "verbose_name": str(meta.verbose_name),
         "verbose_name_plural": str(meta.verbose_name_plural),
         "permissions": _model_permissions(model_admin, request),
+        "actions": actions_payload(model_admin, request),
     }
 
 
