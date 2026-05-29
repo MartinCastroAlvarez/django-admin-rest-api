@@ -567,11 +567,13 @@ def _form_extra_field_descriptor(
         # add-form `obj=None` has nothing for this field on the model
         # side anyway). Coerced through the field's `prepare_value`
         # so a callable initial resolves to a plain wire value.
-        "value": form_field.prepare_value(
-            getattr(form_field, "initial", None),
-        )
-        if hasattr(form_field, "prepare_value")
-        else None,
+        "value": (
+            form_field.prepare_value(
+                getattr(form_field, "initial", None),
+            )
+            if hasattr(form_field, "prepare_value")
+            else None
+        ),
     }
     # ChoiceField-shaped fields expose `{value, label}` entries the
     # client renders as a <select>. Lazy translation proxies coerced
@@ -582,9 +584,7 @@ def _form_extra_field_descriptor(
     raw_choices = getattr(form_field, "choices", None)
     if raw_choices and wire_type in {"choice", "foreignkey", "manytomany"}:
         with suppress(TypeError, ValueError):
-            descriptor["choices"] = [
-                {"value": v, "label": str(lbl)} for v, lbl in raw_choices
-            ]
+            descriptor["choices"] = [{"value": v, "label": str(lbl)} for v, lbl in raw_choices]
     return descriptor
 
 
