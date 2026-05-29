@@ -31,7 +31,6 @@ from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect
 from django.test import Client
 
-
 User = get_user_model()
 DETAIL_BASE = "/admin-api/api/v1/auth/user/"
 
@@ -150,7 +149,7 @@ def test_run_object_action_runs_and_returns_envelope(
 
     def my_action(request, obj):  # noqa: ARG001
         calls.append(obj.pk)
-        return None
+        return
 
     def get_change_actions(request, object_id, form_url):  # noqa: ARG001
         return ["my_action"]
