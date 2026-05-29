@@ -235,15 +235,22 @@ def test_registry_actions_include_default_delete_selected(superuser_client: Clie
 @pytest.mark.django_db
 def test_registry_action_descriptor_shape(superuser_client: Client) -> None:
     """Each action entry has the same shape the list endpoint exposes:
-    ``{name, label, description, requires_confirmation}``."""
+    ``{name, label, description, requires_confirmation, target}``."""
     body = superuser_client.get(REGISTRY_URL).json()
     auth = next(a for a in body["apps"] if a["app_label"] == "auth")
     group = next(m for m in auth["models"] if m["model_name"] == "group")
     for action in group["actions"]:
-        assert set(action.keys()) == {"name", "label", "description", "requires_confirmation"}
+        assert set(action.keys()) == {
+            "name",
+            "label",
+            "description",
+            "requires_confirmation",
+            "target",
+        }
         assert isinstance(action["name"], str) and action["name"]
         assert isinstance(action["label"], str) and action["label"]
         assert isinstance(action["requires_confirmation"], bool)
+        assert action["target"] in {"batch", "detail"}
 
 
 @pytest.mark.django_db

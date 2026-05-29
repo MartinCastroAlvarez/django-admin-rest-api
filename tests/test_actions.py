@@ -23,6 +23,7 @@ from contextlib import suppress
 import pytest
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.db.models import QuerySet
 from django.test import Client
 
 from tests.helpers import admin_override
@@ -442,3 +443,186 @@ def test_action_with_unformattable_label_degrades_gracefully(superuser_client: C
         body = superuser_client.get(LIST_URL).json()
     labels = {a["name"]: a["label"] for a in body["actions"]}
     assert labels["_unformattable_label_action"] == "Frobnicate %(nonexistent)s rows"
+
+
+# --------------------------------------------------------------------------- #
+# `target` classification via signature inspection (#603-revised)             #
+# --------------------------------------------------------------------------- #
+def _batch_action_by_name(model_admin, request, queryset):  # noqa: ANN001, ANN201, ARG001
+    """Batch shape via parameter name only (no annotation)."""
+    return
+
+
+_batch_action_by_name.short_description = "Batch by name"
+
+
+def _batch_action_by_annotation(  # noqa: ANN001, ANN201, ARG001
+    model_admin, request, picks: QuerySet
+):
+    """Batch shape signalled only by ``QuerySet`` annotation (param name
+    is the ambiguous ``picks``)."""
+    return
+
+
+_batch_action_by_annotation.short_description = "Batch by annotation"
+
+
+def _detail_action_obj_id_str(model_admin, request, obj_id: str):  # noqa: ANN001, ANN201, ARG001
+    """Detail shape via ``obj_id: str``."""
+    return
+
+
+_detail_action_obj_id_str.short_description = "Detail by obj_id+str"
+
+
+def _detail_action_object_id_only_name(
+    model_admin, request, object_id
+):  # noqa: ANN001, ANN201, ARG001
+    """Detail shape signalled only by parameter name (no annotation)."""
+    return
+
+
+_detail_action_object_id_only_name.short_description = "Detail by name"
+
+
+@pytest.mark.django_db
+def test_actions_target_default_is_batch_for_stock_delete_selected(
+    superuser_client: Client,
+) -> None:
+    body = superuser_client.get(LIST_URL).json()
+    delete = next(a for a in body["actions"] if a["name"] == "delete_selected")
+    assert delete["target"] == "batch"
+
+
+@pytest.mark.django_db
+def test_actions_target_batch_for_queryset_param_name(superuser_client: Client) -> None:
+    User = get_user_model()
+    with admin_attr(User, actions=[_batch_action_by_name]):
+        body = superuser_client.get(LIST_URL).json()
+    targets = {a["name"]: a["target"] for a in body["actions"]}
+    assert targets["_batch_action_by_name"] == "batch"
+
+
+@pytest.mark.django_db
+def test_actions_target_batch_for_queryset_annotation(superuser_client: Client) -> None:
+    User = get_user_model()
+    with admin_attr(User, actions=[_batch_action_by_annotation]):
+        body = superuser_client.get(LIST_URL).json()
+    targets = {a["name"]: a["target"] for a in body["actions"]}
+    assert targets["_batch_action_by_annotation"] == "batch"
+
+
+@pytest.mark.django_db
+def test_actions_target_detail_for_obj_id_str_signature(superuser_client: Client) -> None:
+    User = get_user_model()
+    with admin_attr(User, actions=[_detail_action_obj_id_str]):
+        body = superuser_client.get(LIST_URL).json()
+    targets = {a["name"]: a["target"] for a in body["actions"]}
+    assert targets["_detail_action_obj_id_str"] == "detail"
+
+
+@pytest.mark.django_db
+def test_actions_target_detail_for_object_id_param_name(superuser_client: Client) -> None:
+    User = get_user_model()
+    with admin_attr(User, actions=[_detail_action_object_id_only_name]):
+        body = superuser_client.get(LIST_URL).json()
+    targets = {a["name"]: a["target"] for a in body["actions"]}
+    assert targets["_detail_action_object_id_only_name"] == "detail"
+
+
+# --------------------------------------------------------------------------- #
+# Runner dispatch for `target=detail`                                          #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_detail_action_runner_passes_str_pk(superuser_client: Client) -> None:
+    """A detail-shaped action receives ``str(pk)`` (not a queryset) from
+    the runner — proving the dispatch path."""
+    User = get_user_model()
+    u1 = User.objects.create_user(username="d1", password="x")  # noqa: S106
+
+    captured: dict = {}
+
+    def _spy_detail_action(model_admin, request, obj_id: str):  # noqa: ANN001, ANN201, ARG001
+        captured["obj_id"] = obj_id
+        captured["type"] = type(obj_id).__name__
+
+    _spy_detail_action.short_description = "Spy detail"
+
+    with admin_attr(User, actions=[_spy_detail_action]):
+        response = superuser_client.post(
+            ACTIONS_BASE + "_spy_detail_action/",
+            data=f'{{"pks": [{u1.pk}]}}',
+            content_type="application/json",
+        )
+    assert response.status_code == 200, response.content
+    assert captured["obj_id"] == str(u1.pk)
+    assert captured["type"] == "str"
+
+
+@pytest.mark.django_db
+def test_detail_action_runner_rejects_multi_pk(superuser_client: Client) -> None:
+    """A detail-shaped action with more than one pk in ``pks`` returns
+    ``400`` — single-object actions cannot fan-out across a selection."""
+    User = get_user_model()
+    u1 = User.objects.create_user(username="m1", password="x")  # noqa: S106
+    u2 = User.objects.create_user(username="m2", password="x")  # noqa: S106
+
+    def _detail(model_admin, request, obj_id: str):  # noqa: ANN001, ANN201, ARG001
+        return None
+
+    _detail.short_description = "Detail"
+
+    with admin_attr(User, actions=[_detail]):
+        response = superuser_client.post(
+            ACTIONS_BASE + "_detail/",
+            data=f'{{"pks": [{u1.pk}, {u2.pk}]}}',
+            content_type="application/json",
+        )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.django_db
+def test_detail_action_runner_404_when_pk_not_in_user_queryset(superuser_client: Client) -> None:
+    """The same row-perm gate batch actions inherit applies to detail: a
+    pk outside ``ModelAdmin.get_queryset(request)`` returns ``404``."""
+    User = get_user_model()
+
+    def _detail(model_admin, request, obj_id: str):  # noqa: ANN001, ANN201, ARG001
+        return None
+
+    _detail.short_description = "Detail"
+
+    with admin_attr(User, actions=[_detail]):
+        response = superuser_client.post(
+            ACTIONS_BASE + "_detail/",
+            data='{"pks": [9999999]}',
+            content_type="application/json",
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_batch_action_runner_unchanged_receives_queryset(superuser_client: Client) -> None:
+    """Backward-compatibility: a stock Django batch-shaped action still
+    receives a ``QuerySet`` (not a string)."""
+    User = get_user_model()
+    u1 = User.objects.create_user(username="b1", password="x")  # noqa: S106
+
+    captured: dict = {}
+
+    def _spy_batch(model_admin, request, queryset):  # noqa: ANN001, ANN201, ARG001
+        captured["type"] = type(queryset).__name__
+        captured["count"] = queryset.count()
+
+    _spy_batch.short_description = "Spy batch"
+
+    with admin_attr(User, actions=[_spy_batch]):
+        response = superuser_client.post(
+            ACTIONS_BASE + "_spy_batch/",
+            data=f'{{"pks": [{u1.pk}]}}',
+            content_type="application/json",
+        )
+    assert response.status_code == 200, response.content
+    assert "QuerySet" in captured["type"]
+    assert captured["count"] == 1

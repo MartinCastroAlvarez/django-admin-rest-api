@@ -5,6 +5,35 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] — 2026-05-29
+
+### Added
+- **`target` on every action descriptor.** The action payload exposed
+  on the registry, list, and detail responses now carries a
+  ``"target": "batch" | "detail"`` field. The classifier inspects the
+  registered callable's signature:
+    - third parameter named ``queryset`` / ``qs`` OR annotated
+      ``QuerySet`` → ``"batch"`` (Django's stock changelist action shape)
+    - third parameter named ``obj_id`` / ``object_id`` / ``pk`` / ``id``
+      OR annotated ``str`` / ``int`` / ``Model`` subclass →
+      ``"detail"`` (single-object shape)
+    - anything else → ``"batch"`` (safe default for stock Django).
+  The SPA renders ``batch`` actions on the changelist and ``detail``
+  actions on the single-object page; one declaration, the surface is
+  chosen by signature.
+- **Runner dispatch by ``target``.** The existing
+  ``POST /api/v1/<app>/<model>/actions/<name>/`` endpoint now calls
+  ``batch`` actions with the user-narrowed ``QuerySet`` (unchanged) and
+  ``detail`` actions with ``str(obj.pk)`` (new). A ``detail`` action
+  POST must pass exactly one entry in ``pks``; multi-pk requests return
+  ``400`` so a consumer can't accidentally invoke a single-object action
+  across a selection.
+
+### Behavior
+- Backward-compatible. Existing stock Django actions
+  ``(modeladmin, request, queryset)`` keep their ``"batch"``
+  classification and identical runner call shape.
+
 ## [1.0.5] — 2026-05-29
 
 ### Removed
