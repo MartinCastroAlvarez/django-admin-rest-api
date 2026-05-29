@@ -18,6 +18,7 @@ Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
 from __future__ import annotations
 
 from typing import Any
+from typing import Final
 
 from django.contrib.admin.options import ModelAdmin
 from django.contrib.admin.utils import label_for_field
@@ -367,6 +368,24 @@ def _descriptor_for(
     """Per-field descriptor for one ``visible_names`` entry."""
     model_field = safe_get_field(model, name)
     if model_field is None:
+        # Form-extra fields (#606): a ModelAdmin's custom Form may
+        # declare extra fields that are NOT on the model (e.g.
+        # `email = forms.EmailField()` on a Profile form when `email`
+        # lives on the related `User`). Django renders these correctly
+        # in the legacy admin via `form.fields[name]`. Mirror that
+        # behaviour: if the form has a field, build the descriptor
+        # from it. The fallback to `_readonly_callable_descriptor`
+        # stays for genuinely-no-form callables (`@admin.display`
+        # methods etc., the original path).
+        form_field = form.fields.get(name) if form is not None else None
+        if form_field is not None:
+            return _form_extra_field_descriptor(
+                model_admin=model_admin,
+                model=model,
+                name=name,
+                form_field=form_field,
+                is_readonly=is_readonly,
+            )
         return _readonly_callable_descriptor(model_admin, model, obj, name)
 
     if isinstance(model_field, ForeignKey):
@@ -471,6 +490,103 @@ def _apply_widget_override(descriptor: dict[str, Any], form_field: Any) -> None:
         and not isinstance(widget, Textarea)
     ):
         descriptor["type"] = "string"
+
+
+# Form-field-class → wire type. Mirrors `_TYPE_BY_INTERNAL` in
+# serializers.py but for Django's `forms.*` field classes (used by a
+# ModelAdmin's custom Form to declare non-model fields, #606).
+# Same vocabulary so the client doesn't need to know whether a
+# field came from the model or from a form-only declaration.
+_FORM_FIELD_TYPE: Final[dict[str, str]] = {
+    "BooleanField": "boolean",
+    "NullBooleanField": "boolean",
+    "CharField": "string",
+    "EmailField": "email",
+    "URLField": "url",
+    "SlugField": "slug",
+    "UUIDField": "uuid",
+    "IntegerField": "integer",
+    "FloatField": "float",
+    "DecimalField": "decimal",
+    "DateField": "date",
+    "DateTimeField": "datetime",
+    "TimeField": "time",
+    "DurationField": "duration",
+    "FileField": "file",
+    "ImageField": "image",
+    "FilePathField": "filepath",
+    "GenericIPAddressField": "ip",
+    "JSONField": "json",
+    "ChoiceField": "choice",
+    "TypedChoiceField": "choice",
+    "MultipleChoiceField": "choice",
+    "TypedMultipleChoiceField": "choice",
+    "ModelChoiceField": "foreignkey",
+    "ModelMultipleChoiceField": "manytomany",
+}
+
+
+def _form_extra_field_descriptor(
+    *,
+    model_admin: ModelAdmin,
+    model: type[Model],
+    name: str,
+    form_field: Any,
+    is_readonly: bool,
+) -> dict[str, Any]:
+    """Descriptor for a form field NOT backed by a model field (#606).
+
+    ModelAdmin's custom Forms (via ``ModelAdmin.get_form()``) routinely
+    declare extra fields — e.g. ``forms.EmailField()`` on a Profile
+    create-form when the email lives on a related User — that Django's
+    legacy admin renders correctly. The SPA's descriptor pipeline
+    needs an equivalent: map the form-field class to one of the
+    existing wire types so the client renders the right input widget
+    instead of falling through to ``unsupported`` + ``readonly``
+    (which was the v1.x behaviour and broke every "create via
+    related field" workflow on the SPA).
+
+    `Textarea` widget on a CharField is collapsed to the multi-line
+    ``text`` type (mirrors ``_apply_widget_override`` for model fields).
+    Choices on a ChoiceField come through as `{value, label}` entries.
+    """
+    cls_name = type(form_field).__name__
+    wire_type = _FORM_FIELD_TYPE.get(cls_name, "string")
+    # CharField + Textarea widget = multi-line text (same convention
+    # as `_apply_widget_override` for model fields).
+    if wire_type == "string" and isinstance(form_field.widget, Textarea):
+        wire_type = "text"
+    descriptor: dict[str, Any] = {
+        "type": wire_type,
+        "label": _field_label(model_admin, model, name),
+        "required": bool(getattr(form_field, "required", False)),
+        "readonly": is_readonly,
+        "help_text": str(getattr(form_field, "help_text", "") or ""),
+        # Initial value, if the form sets one — empty otherwise (the
+        # add-form `obj=None` has nothing for this field on the model
+        # side anyway). Coerced through the field's `prepare_value`
+        # so a callable initial resolves to a plain wire value.
+        "value": form_field.prepare_value(
+            getattr(form_field, "initial", None),
+        )
+        if hasattr(form_field, "prepare_value")
+        else None,
+    }
+    # ChoiceField-shaped fields expose `{value, label}` entries the
+    # client renders as a <select>. Lazy translation proxies coerced
+    # via str() so they resolve to the request locale.
+    raw_choices = getattr(form_field, "choices", None)
+    if raw_choices and wire_type in {"choice", "foreignkey", "manytomany"}:
+        try:
+            descriptor["choices"] = [
+                {"value": v, "label": str(lbl)} for v, lbl in raw_choices
+            ]
+        except (TypeError, ValueError):
+            # Lazy iterators (e.g. `ModelChoiceIterator`) may raise on
+            # the first iteration if the queryset isn't ready. Skip
+            # — the client renders an empty select rather than 500ing.
+            pass
+    return descriptor
 
 
 def _readonly_callable_descriptor(
