@@ -17,6 +17,7 @@ Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 from typing import Final
 
@@ -574,18 +575,16 @@ def _form_extra_field_descriptor(
     }
     # ChoiceField-shaped fields expose `{value, label}` entries the
     # client renders as a <select>. Lazy translation proxies coerced
-    # via str() so they resolve to the request locale.
+    # via str() so they resolve to the request locale. Lazy iterators
+    # (e.g. `ModelChoiceIterator`) may raise on the first iteration if
+    # the queryset isn't ready — `suppress` keeps that defensive: the
+    # client renders an empty select rather than 500ing.
     raw_choices = getattr(form_field, "choices", None)
     if raw_choices and wire_type in {"choice", "foreignkey", "manytomany"}:
-        try:
+        with suppress(TypeError, ValueError):
             descriptor["choices"] = [
                 {"value": v, "label": str(lbl)} for v, lbl in raw_choices
             ]
-        except (TypeError, ValueError):
-            # Lazy iterators (e.g. `ModelChoiceIterator`) may raise on
-            # the first iteration if the queryset isn't ready. Skip
-            # — the client renders an empty select rather than 500ing.
-            pass
     return descriptor
 
 
