@@ -7,6 +7,7 @@
 [![Django versions](https://img.shields.io/badge/Django-5.0%20%7C%205.1%20%7C%205.2%20%7C%206.0-44b78b.svg)](https://www.djangoproject.com/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Wire contract: stable](https://img.shields.io/badge/wire%20contract-stable-44b78b.svg)](CHANGELOG.md)
+[![Latest on Django Packages](https://img.shields.io/badge/PyPI-django--admin--rest--api--tags-8c3c26.svg)](https://djangopackages.org/packages/p/django-admin-rest-api/)
 
 `django-admin-rest-api` exposes every `ModelAdmin` you've already
 registered on `django.contrib.admin.site` (or your own `AdminSite`)
