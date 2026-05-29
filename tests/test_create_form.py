@@ -251,3 +251,86 @@ def test_overlay_skips_field_absent_from_form() -> None:
     _overlay_initial(fields, Group, form, {"name": "changed"}, None, None)
 
     assert fields["name"]["value"] == "orig"
+
+
+# --------------------------------------------------------------------------- #
+# Form-extra fields (#606) — fields declared on the form but not on the model #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_form_extra_field_renders_as_typed_input_not_unsupported(
+    superuser_client: Client,
+) -> None:
+    """A ModelAdmin's custom Form may declare extra fields not on the
+    model (e.g. a Profile create-form's ``email = forms.EmailField()``
+    when ``email`` lives on the related User). v1.0.2 + earlier surfaced
+    those as ``type=unsupported`` + ``readonly=True``, breaking every
+    'create via related field' workflow. v1.0.4 (#606) maps the
+    form-field class to one of the existing wire types so the SPA
+    renders the right input widget."""
+    from django import forms
+    from django.contrib.auth.models import Group
+
+    class GroupCreateWithExtraEmail(forms.ModelForm):
+        # An extra field NOT on the Group model. Mirrors the issue's
+        # repro: a Profile create-form declaring `email` when the email
+        # actually lives on the User.
+        notify_email = forms.EmailField(required=True, help_text="Where to send the welcome email.")
+
+        class Meta:
+            model = Group
+            fields = ("name", "notify_email")
+
+    def fake_get_form(self, request, obj=None, change=False, **kwargs):
+        return GroupCreateWithExtraEmail
+
+    def fake_get_fields(self, request, obj=None):
+        return ("name", "notify_email")
+
+    with admin_override(
+        Group,
+        get_form=fake_get_form,
+        get_fields=fake_get_fields,
+    ):
+        response = superuser_client.get(ADD_URL)
+        assert response.status_code == 200
+        fields = response.json()["fields"]
+        # The extra field must be present and typed:
+        assert "notify_email" in fields
+        notify = fields["notify_email"]
+        assert notify["type"] == "email"
+        assert notify["readonly"] is False
+        assert notify["required"] is True
+        assert notify["help_text"] == "Where to send the welcome email."
+
+
+@pytest.mark.django_db
+def test_form_extra_charfield_with_textarea_widget_becomes_text_type(
+    superuser_client: Client,
+) -> None:
+    """A CharField declared on the form with a Textarea widget renders
+    as the multi-line ``text`` type — same convention the model-field
+    path uses via ``_apply_widget_override`` (#606 polish)."""
+    from django import forms
+    from django.contrib.auth.models import Group
+
+    class GroupCreateWithNote(forms.ModelForm):
+        note = forms.CharField(required=False, widget=forms.Textarea)
+
+        class Meta:
+            model = Group
+            fields = ("name", "note")
+
+    def fake_get_form(self, request, obj=None, change=False, **kwargs):
+        return GroupCreateWithNote
+
+    def fake_get_fields(self, request, obj=None):
+        return ("name", "note")
+
+    with admin_override(
+        Group,
+        get_form=fake_get_form,
+        get_fields=fake_get_fields,
+    ):
+        response = superuser_client.get(ADD_URL)
+        fields = response.json()["fields"]
+        assert fields["note"]["type"] == "text"
