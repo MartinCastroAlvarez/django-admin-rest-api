@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-admin-rest-api"
-version = "1.0.10"
+version = "1.0.11"
 description = "A JSON REST API for the Django admin — same permissions, same ModelAdmin, no new features. Powers django-admin-react and django-admin-mcp."
 authors = ["django-admin-rest-api contributors"]
 license = "MIT"

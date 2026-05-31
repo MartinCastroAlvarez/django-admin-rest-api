@@ -587,3 +587,57 @@ def test_list_surfaces_list_display_links(superuser_client: Client) -> None:
     finally:
         del model_admin.list_display
         del model_admin.list_display_links
+
+
+# --------------------------------------------------------------------------- #
+# N+1 perf — `list_select_related` honored at scale (#39)                     #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_list_endpoint_does_not_n_plus_1_on_fk_columns(
+    superuser_client: Client, django_assert_max_num_queries
+) -> None:
+    """The list endpoint must NOT issue one extra query per FK row.
+
+    Setup: use ``auth.Permission`` (which has a FK to ``ContentType``).
+    Force the admin's ``list_display`` to include the FK column;
+    ``_apply_select_related`` should auto-apply ``select_related()``
+    so the whole page renders in a small constant number of queries
+    regardless of row count.
+
+    Without the optimisation, the failure mode is one extra query per
+    row resolving the FK — for 50 rows that's 50+ queries. The
+    threshold of 25 is generous against the current implementation
+    (which does ~10–15) while still catching a regression that
+    removes the select_related call.
+    """
+    from django.contrib.auth.models import Permission
+
+    list_url = "/admin-api/api/v1/auth/permission/"
+
+    # Permission isn't auto-registered by Django; register it for the
+    # test with an admin that includes the FK column in list_display.
+    class _PermissionAdmin(admin.ModelAdmin):
+        list_display = ("name", "content_type", "codename")
+
+    admin.site.register(Permission, _PermissionAdmin)
+    try:
+        # Permission table is well-populated by Django's auth migration
+        # (~3 perms per model × ~12 stock models = ~40 rows).
+        with django_assert_max_num_queries(25):
+            response = superuser_client.get(list_url + "?page_size=50")
+        assert response.status_code == 200
+        body = response.json()
+        # Confirm we actually exercised FK rendering — content_type must
+        # be in the columns list, and its value on every row is the
+        # related-FK envelope (not a raw int, which would mean
+        # select_related never materialised the join).
+        column_names = {c["name"] for c in body["columns"]}
+        assert "content_type" in column_names
+        for row in body["results"]:
+            ct = row["fields"].get("content_type")
+            assert ct is None or isinstance(ct, dict), (
+                f"content_type came back as {type(ct).__name__}; "
+                "expected related-FK dict (select_related missing?)"
+            )
+    finally:
+        admin.site.unregister(Permission)

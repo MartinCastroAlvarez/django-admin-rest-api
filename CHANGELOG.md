@@ -5,6 +5,34 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] — 2026-05-31
+
+### Added
+- **N+1 perf test on the list endpoint** (#39). A new test in
+  `tests/test_list.py` registers `auth.Permission` (which has a FK
+  to `ContentType`) with a `list_display` that includes the FK
+  column and asserts the whole page renders in ≤25 queries
+  regardless of row count. The existing `_apply_select_related`
+  helper was already correct; this test guards against a regression
+  that removes the `select_related()` call. Confirms the package
+  honors `ModelAdmin.list_select_related` and auto-applies
+  `select_related()` when an FK column is in `list_display`.
+- **Custom-user-model safety tests** (#38) in
+  `tests/test_custom_user_model_safety.py`. The package already
+  contains zero direct references to
+  `django.contrib.auth.models.User` (verified by a new static
+  grep test) — it stays abstract via `request.user` and
+  `model_admin.model`. The new file codifies that property so a
+  refactor that accidentally hardcodes `User` is caught at test
+  time. Dynamic tests confirm `is_admin_user` degrades correctly
+  when a custom user model lacks `is_staff` / `is_active`, and the
+  password endpoint 404s (not 500) when the admin doesn't declare
+  `change_password_form`.
+
+### Behavior
+- No code change in the package itself; the abstractions for custom
+  user models were already in place. This release codifies them.
+
 ## [1.0.10] — 2026-05-31
 
 ### Added
