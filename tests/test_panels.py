@@ -143,3 +143,33 @@ def test_panel_response_has_no_store(superuser_client: Client) -> None:
     ):
         response = superuser_client.get(_panel_url(g.pk, "audit_trail"))
     assert response["Cache-Control"] == "no-store"
+
+
+# --------------------------------------------------------------------------- #
+# Deprecation shim — `PanelEndpointsMixin` is no longer required (#34)        #
+# --------------------------------------------------------------------------- #
+def test_panel_endpoints_mixin_subclass_emits_deprecation_warning() -> None:
+    """Subclassing the (deprecated) mixin must emit a DeprecationWarning."""
+    import warnings
+
+    from django_admin_rest_api.api.panels import PanelEndpointsMixin
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+
+        class _DeprecatedConsumer(PanelEndpointsMixin):
+            pass
+
+    relevant = [w for w in captured if issubclass(w.category, DeprecationWarning)]
+    assert relevant, "no DeprecationWarning emitted"
+    assert "PanelEndpointsMixin" in str(relevant[0].message)
+
+
+def test_panels_attr_works_without_the_mixin() -> None:
+    """A consumer declares `panels = {...}` directly on any ModelAdmin;
+    no `PanelEndpointsMixin` subclass needed."""
+    from django.contrib.admin.options import ModelAdmin
+
+    from django_admin_rest_api.api.panels import PanelEndpointsMixin
+
+    assert not issubclass(ModelAdmin, PanelEndpointsMixin)
