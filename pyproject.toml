@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-admin-rest-api"
-version = "1.0.11"
+version = "1.1.0"
 description = "A JSON REST API for the Django admin — same permissions, same ModelAdmin, no new features. Powers django-admin-react and django-admin-mcp."
 authors = ["django-admin-rest-api contributors"]
 license = "MIT"
@@ -13,6 +13,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Web Environment",
     "Framework :: Django",
+    "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
     "Framework :: Django :: 5.2",
@@ -35,7 +36,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-django = ">=5.0,<7.0"
+django = ">=4.2,<7.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
