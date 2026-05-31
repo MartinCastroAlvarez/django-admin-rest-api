@@ -76,9 +76,7 @@ def test_e001_errors_on_non_adminsite_object(settings) -> None:
     """A dotted path that resolves to something OTHER than an `AdminSite`
     must also error. Point at the `AdminSite` CLASS (which exists and
     imports cleanly but isn't an instance) to hit the isinstance branch."""
-    settings.DJANGO_ADMIN_REST_API = {
-        "ADMIN_SITE": "django.contrib.admin.sites.AdminSite"
-    }
+    settings.DJANGO_ADMIN_REST_API = {"ADMIN_SITE": "django.contrib.admin.sites.AdminSite"}
     from django_admin_rest_api import conf as _conf
 
     _conf._cached = None

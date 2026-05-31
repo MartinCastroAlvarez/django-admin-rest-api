@@ -125,10 +125,7 @@ def check_required_middleware(app_configs: Any, **kwargs: Any) -> list[Any]:
         if required not in configured:
             out.append(
                 ChecksWarning(
-                    (
-                        f"required middleware {required!r} is not in "
-                        "`settings.MIDDLEWARE`."
-                    ),
+                    (f"required middleware {required!r} is not in " "`settings.MIDDLEWARE`."),
                     hint=(
                         "Add it to `MIDDLEWARE` (or document that you "
                         "swapped in a drop-in equivalent — this is a "
