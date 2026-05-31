@@ -176,6 +176,22 @@ class ActionView(View):
         if not isinstance(pks, list) or not pks:
             return bad_request("`pks` must be a non-empty list.")
 
+        # DoS guard (#41): cap the selection size so a crafted POST
+        # cannot ask an expensive action to fan out across an
+        # unbounded queryset. Mirrors ``MAX_PAGE_SIZE``'s posture on
+        # the list endpoint. ``0`` (or below) disables the cap so
+        # operators with legitimate large-selection workflows can opt
+        # out via settings.
+        from django_admin_rest_api import conf
+
+        cap = int(conf.MAX_ACTION_PKS or 0)
+        if cap > 0 and len(pks) > cap:
+            return bad_request(
+                f"`pks` length ({len(pks)}) exceeds the configured cap of {cap}; "
+                "increase ``DJANGO_ADMIN_REST_API['MAX_ACTION_PKS']`` if you have a "
+                "legitimate workflow."
+            )
+
         # The client runs its own styled confirm dialog, which stands in
         # for Django's intermediate HTML confirmation page. When it
         # reports the user confirmed, signal that to two-phase actions

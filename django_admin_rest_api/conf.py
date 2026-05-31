@@ -34,6 +34,13 @@ DEFAULTS: dict[str, Any] = {
     # (a DoS guard).
     "DEFAULT_PAGE_SIZE": 25,
     "MAX_PAGE_SIZE": 200,
+    # Cap on ``len(pks)`` in the actions runner body. Mirrors
+    # ``MAX_PAGE_SIZE``'s posture for the list endpoint: a DoS guard
+    # against a crafted POST that asks the runner to invoke an
+    # expensive action across a very large selection. Tuneable per
+    # project (raise it if you have legitimate workflows running
+    # actions across larger selections). 0 disables the cap entirely.
+    "MAX_ACTION_PKS": 5000,
     # When True, list responses include per-query timing in a debug
     # block. Off by default — only enable in development.
     "ENABLE_PROFILING": False,
@@ -47,6 +54,7 @@ class _PackageSettings:
     ADMIN_SITE: str = DEFAULTS["ADMIN_SITE"]
     DEFAULT_PAGE_SIZE: int = DEFAULTS["DEFAULT_PAGE_SIZE"]
     MAX_PAGE_SIZE: int = DEFAULTS["MAX_PAGE_SIZE"]
+    MAX_ACTION_PKS: int = DEFAULTS["MAX_ACTION_PKS"]
     ENABLE_PROFILING: bool = DEFAULTS["ENABLE_PROFILING"]
 
 
