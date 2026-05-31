@@ -13,6 +13,7 @@ signature:
 from __future__ import annotations
 
 from django.contrib import admin
+from django.db import models
 from django.db.models import QuerySet
 
 from minimal_project.models import Note
@@ -28,11 +29,6 @@ def mark_archived(modeladmin, request, queryset: QuerySet) -> None:  # noqa: ARG
 def bump_priority(modeladmin, request, obj_id: str) -> None:  # noqa: ARG001
     """Detail shape: takes a single object id. Renders on the detail page."""
     Note.objects.filter(pk=obj_id).update(priority=models.F("priority") + 1)
-
-
-# Re-import models here so the F() expression in bump_priority resolves
-# at call-time without a circular import at module-import time.
-from django.db import models  # noqa: E402  (intentional after the action defs)
 
 
 @admin.register(Note)
