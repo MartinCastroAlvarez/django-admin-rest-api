@@ -244,6 +244,13 @@ def _spec_for_simple_filter(
         selected = instance.value()
     except Exception:  # pragma: no cover — admin author error
         selected = None
+    # Django 4.2's ``SimpleListFilter.__init__`` stores the raw list from
+    # ``QueryDict.pop`` in ``used_parameters`` — so ``.value()`` returns
+    # ``['no']`` instead of ``'no'``. Django 5.0+ stores ``value[-1]``
+    # (the last scalar). Normalize so the wire shape is consistent
+    # regardless of which Django version the consumer is on (#622).
+    if isinstance(selected, list):
+        selected = selected[-1] if selected else None
     return {
         "name": instance.parameter_name,
         "label": str(getattr(instance, "title", "") or instance.parameter_name),

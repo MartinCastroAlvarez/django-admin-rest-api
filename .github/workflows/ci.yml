@@ -14,13 +14,18 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
-        django: ["5.0", "5.1", "5.2", "6.0"]
-        # Django 6.0 dropped Python 3.10 and 3.11 support.
+        django: ["4.2", "5.0", "5.1", "5.2", "6.0"]
         exclude:
+          # Django 6.0 dropped Python 3.10 and 3.11 support.
           - python: "3.10"
             django: "6.0"
           - python: "3.11"
             django: "6.0"
+          # Django 4.2 added Python 3.13 in 4.2.16; pytest CI installs
+          # the latest 4.2.* so this combo passes — but the pip
+          # resolver can lag behind, so we skip pre-emptively.
+          - python: "3.13"
+            django: "4.2"
     steps:
       - uses: actions/checkout@v4
 

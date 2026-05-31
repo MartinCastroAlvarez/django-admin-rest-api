@@ -5,6 +5,33 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-05-31
+
+### Added
+- **Django 4.2 LTS support** (`django-admin-react#622`). The pin is
+  relaxed from `django >=5.0,<7.0` to `django >=4.2,<7.0`; the CI
+  matrix now exercises 4.2 alongside 5.0 / 5.1 / 5.2 / 6.0. Python
+  3.13 is excluded for 4.2 (Django 4.2 added 3.13 support in 4.2.16
+  but pip may still resolve to an earlier 4.2.x).
+
+### Fixed
+- **`SimpleListFilter` value-shape normalization on Django 4.2.**
+  Django 4.2's `SimpleListFilter.__init__` stores the raw list
+  returned by `QueryDict.pop` in `used_parameters`, so
+  `instance.value()` returns `['no']` instead of `'no'`. Django
+  5.0+ stores `value[-1]` instead. The package's
+  `_spec_for_simple_filter` now normalizes a list-shaped
+  `selected` to its last scalar, so the wire payload is consistent
+  regardless of Django version. Consumers writing
+  cross-version `SimpleListFilter` subclasses should do the same in
+  their own `value()` override (one of the test fixtures
+  demonstrates the pattern).
+
+### Why a minor bump
+New supported environment (Django 4.2 LTS) per SemVer's
+"additive features that broaden compatibility" guideline. No
+behavior change for consumers already on 5.0+.
+
 ## [1.0.11] — 2026-05-31
 
 ### Added

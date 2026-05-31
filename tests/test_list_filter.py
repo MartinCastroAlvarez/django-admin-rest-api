@@ -113,6 +113,17 @@ class _ActiveFilter(SimpleListFilter):
     def lookups(self, request, model_admin):
         return [("yes", "Active"), ("no", "Inactive")]
 
+    def value(self):
+        # Django 4.2's ``SimpleListFilter.__init__`` stores the raw list
+        # from ``QueryDict.pop`` in ``used_parameters`` — so ``.value()``
+        # returns ``['no']`` instead of ``'no'``. Django 5.0+ stores
+        # ``value[-1]``. Real consumers writing cross-version SimpleList
+        # filters need the same normalization in their ``value()`` (#622).
+        v = super().value()
+        if isinstance(v, list):
+            v = v[-1] if v else None
+        return v
+
     def queryset(self, request, queryset):
         value = self.value()
         if value == "yes":
