@@ -393,6 +393,17 @@ def _descriptor_for(
     # relations). ``elif`` so ``radio_fields`` wins if a field is in both.
     elif name in (getattr(model_admin, "raw_id_fields", None) or ()):
         descriptor["widget"] = "raw_id"
+    # filter_horizontal / filter_vertical (#627): M2M fields the admin
+    # lists here render as Django's two-pane shuttle widget in the
+    # legacy HTML admin. Emit the orientation hint so the SPA can
+    # render a searchable two-pane control instead of a single-list
+    # checkbox bank (which doesn't scale past ~50 options). ``elif``
+    # so ``raw_id_fields`` wins on the same field (operator opted out
+    # of large-set widgets entirely).
+    elif name in (getattr(model_admin, "filter_horizontal", None) or ()):
+        descriptor["widget"] = "shuttle_h"
+    elif name in (getattr(model_admin, "filter_vertical", None) or ()):
+        descriptor["widget"] = "shuttle_v"
     # formfield_overrides (#446): the bound form field's widget already
     # reflects the admin's ``formfield_overrides`` /
     # ``formfield_for_dbfield`` — Django applied them in ``get_form``.

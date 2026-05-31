@@ -726,6 +726,116 @@ def test_raw_id_fields_surface_widget_hint() -> None:
 
 
 @pytest.mark.django_db
+def test_filter_horizontal_surfaces_shuttle_h_widget_hint() -> None:
+    """An M2M field listed in ``ModelAdmin.filter_horizontal`` gets a
+    ``widget: "shuttle_h"`` hint; ``raw_id_fields`` still wins on a
+    field listed in both (operator explicitly opted out of large-set
+    widgets entirely). Presentational only — no permission/value change
+    (#627)."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    class _ShuttleHAdmin(admin.ModelAdmin):
+        filter_horizontal = ("permissions",)
+
+    model_admin = _ShuttleHAdmin(Group, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="shuttle-h-su",
+        email="shuttle-h@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Group,
+        model_admin=model_admin,
+        obj=Group(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    assert _descriptor_for(name="permissions", **common)["widget"] == "shuttle_h"
+    # name field — not in filter_horizontal — no widget hint.
+    assert "widget" not in _descriptor_for(name="name", **common)
+
+
+@pytest.mark.django_db
+def test_filter_vertical_surfaces_shuttle_v_widget_hint() -> None:
+    """Sibling of the previous test for the vertical orientation —
+    Django's ``filter_vertical`` flips the shuttle to vertical (#627)."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    class _ShuttleVAdmin(admin.ModelAdmin):
+        filter_vertical = ("permissions",)
+
+    model_admin = _ShuttleVAdmin(Group, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="shuttle-v-su",
+        email="shuttle-v@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Group,
+        model_admin=model_admin,
+        obj=Group(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    assert _descriptor_for(name="permissions", **common)["widget"] == "shuttle_v"
+
+
+@pytest.mark.django_db
+def test_raw_id_fields_wins_over_filter_horizontal_when_both_declared() -> None:
+    """If a field is listed in BOTH ``raw_id_fields`` and
+    ``filter_horizontal``, the ``raw_id`` hint wins — the operator
+    explicitly opted out of any large-set widget. ``elif`` chain
+    order in ``_descriptor_for`` (#627)."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    class _BothAdmin(admin.ModelAdmin):
+        raw_id_fields = ("permissions",)
+        filter_horizontal = ("permissions",)
+
+    model_admin = _BothAdmin(Group, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="both-su",
+        email="both@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Group,
+        model_admin=model_admin,
+        obj=Group(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    assert _descriptor_for(name="permissions", **common)["widget"] == "raw_id"
+
+
+@pytest.mark.django_db
 def test_formfield_overrides_textarea_promotes_string_to_text() -> None:
     """A CharField the admin overrides with a ``Textarea`` via
     ``formfield_overrides`` surfaces as the multi-line ``text`` type (so the
