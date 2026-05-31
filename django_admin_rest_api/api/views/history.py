@@ -38,6 +38,7 @@ from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import resolve_model
+from django_admin_rest_api.api.serializers import is_sensitive_field_name
 from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import not_found_response
@@ -126,12 +127,20 @@ def _serialize_entry(entry: LogEntry) -> dict[str, Any]:
 
 
 def _structured_message(entry: LogEntry) -> Any:
-    """Return the raw structured change message, or ``[]`` if absent.
+    """Return the structured change message, or ``[]`` if absent.
 
     ``LogEntry.change_message`` is a JSON string for entries written by
     modern admin; older / hand-written entries may store free text.
     ``get_change_message`` already handles the prose rendering, so here
     we only surface the structured form when it parses as a list.
+
+    Sensitive-name filtering (#42): Django's structured message lists
+    field NAMES that changed (e.g. ``{"changed": {"fields":
+    ["password", "email"]}}``). Field names that match the sensitive
+    denylist (``password``, ``token``, ``secret``, …) are stripped
+    from the wire so the audit log does not leak which sensitive
+    fields were touched. Field VALUES are not in Django's structured
+    payload, so no value redaction is needed.
     """
     import json
 
@@ -140,7 +149,36 @@ def _structured_message(entry: LogEntry) -> Any:
         parsed = json.loads(raw)
     except (ValueError, TypeError):
         return []
-    return parsed if isinstance(parsed, list) else []
+    if not isinstance(parsed, list):
+        return []
+    return [_redact_structured_entry(item) for item in parsed]
+
+
+def _redact_structured_entry(item: Any) -> Any:
+    """Drop sensitive field names from a single structured-message entry.
+
+    Django's shape is ``{"<op>": {"name": "<model>", "object": "<repr>",
+    "fields": ["<field>", ...]}}`` where ``<op>`` is one of ``added`` /
+    ``changed`` / ``deleted``. We walk the ``fields`` list of every
+    operation and prune names matching :func:`is_sensitive_field_name`.
+    Anything that doesn't match the expected shape is passed through
+    unchanged so older / hand-written entries are not corrupted.
+    """
+    if not isinstance(item, dict):
+        return item
+    out: dict[str, Any] = {}
+    for op, body in item.items():
+        if not isinstance(body, dict):
+            out[op] = body
+            continue
+        body_copy = dict(body)
+        fields = body_copy.get("fields")
+        if isinstance(fields, list):
+            body_copy["fields"] = [
+                name for name in fields if not is_sensitive_field_name(str(name))
+            ]
+        out[op] = body_copy
+    return out
 
 
 def _page_size(request: HttpRequest) -> int:

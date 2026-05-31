@@ -5,6 +5,39 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] — 2026-05-31
+
+### Infrastructure
+- **Publishing switched to PyPI Trusted Publishing (OIDC).** The
+  release workflow no longer relies on a long-lived `PYPI_API_TOKEN`
+  secret — PyPI mints a short-lived credential per publish based on
+  GitHub's OIDC token. The workflow file is renamed
+  `.github/workflows/release.yml` → `.github/workflows/publish.yml`
+  to match the trust binding registered on pypi.org, and the obsolete
+  `PYPI_API_TOKEN` environment secret has been removed.
+
+### Security
+- **Actions runner now caps the number of pks per call** (#41). New
+  setting `MAX_ACTION_PKS` (default `5000`) on the
+  `DJANGO_ADMIN_REST_API` dict; an action POST with more pks than the
+  cap returns `400`. Set to `0` (or any non-positive value) to
+  disable. Mirrors `MAX_PAGE_SIZE`'s DoS-guard posture on the list
+  endpoint.
+- **History endpoint's `change_message_structured` now redacts
+  sensitive field names** (#42). Django's structured change message
+  lists which fields changed by NAME (`["password", "email"]`); names
+  matching the package's sensitive-name denylist are stripped from
+  the wire so the audit log can't be used as an oracle for which
+  sensitive fields were touched. Field values are not in Django's
+  structured payload, so no value redaction is needed. `change_message_human`
+  (Django's prose render) is unaffected — Django itself does not put
+  values in it for sensitive fields.
+
+### Behavior
+- No breaking change. Both settings keep working without consumer
+  action; the cap default is large enough that real admin workflows
+  are not affected.
+
 ## [1.0.6] — 2026-05-29
 
 ### Added

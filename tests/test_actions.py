@@ -162,6 +162,54 @@ def test_empty_pks_returns_400(superuser_client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_pks_over_cap_returns_400(superuser_client: Client, settings) -> None:
+    """`pks` longer than `MAX_ACTION_PKS` → 400. Cap is set low so we
+    can exercise the guard without inserting thousands of rows (#41)."""
+    settings.DJANGO_ADMIN_REST_API = {"MAX_ACTION_PKS": 3}
+    # Force the package's cached settings to reload — conf.py caches
+    # on first access; an override has to invalidate.
+    from django_admin_rest_api import conf as _conf
+
+    _conf._cached = None
+    try:
+        response = superuser_client.post(
+            ACTIONS_BASE + "delete_selected/",
+            data='{"pks": [1, 2, 3, 4, 5]}',
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert body["error"]["code"] == "bad_request"
+        assert "exceeds the configured cap" in body["error"]["message"]
+        assert "3" in body["error"]["message"]
+    finally:
+        _conf._cached = None
+
+
+@pytest.mark.django_db
+def test_pks_cap_zero_disables_the_guard(superuser_client: Client, settings) -> None:
+    """`MAX_ACTION_PKS = 0` means no cap — used by operators with
+    legitimate large-selection workflows."""
+    settings.DJANGO_ADMIN_REST_API = {"MAX_ACTION_PKS": 0}
+    from django_admin_rest_api import conf as _conf
+
+    _conf._cached = None
+    try:
+        # 50-element pk list against the default `delete_selected` runs
+        # through (no rows match → no actual deletion) without 400.
+        response = superuser_client.post(
+            ACTIONS_BASE + "delete_selected/",
+            data='{"pks": ' + str(list(range(50))) + ', "confirmed": true}',
+            content_type="application/json",
+        )
+        # 200: even though no actual rows match these pks, the runner
+        # accepts the request and the action callable just no-ops.
+        assert response.status_code == 200
+    finally:
+        _conf._cached = None
+
+
+@pytest.mark.django_db
 def test_missing_pks_returns_400(superuser_client: Client) -> None:
     response = superuser_client.post(
         ACTIONS_BASE + "delete_selected/",

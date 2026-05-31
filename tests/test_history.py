@@ -145,6 +145,47 @@ def test_structured_message_surfaced(superuser_client, django_user_model) -> Non
 
 
 @pytest.mark.django_db
+def test_structured_message_redacts_sensitive_field_names(
+    superuser_client, django_user_model
+) -> None:
+    """A LogEntry that records a change to a sensitive-named field
+    (e.g. ``password``) MUST NOT surface that field name on the wire —
+    the audit log shouldn't act as an oracle for which sensitive
+    fields were touched (#42)."""
+    g = Group.objects.create(name="g")
+    user = django_user_model.objects.filter(is_superuser=True).first()
+    _log(
+        g,
+        user,
+        message=json.dumps([{"changed": {"fields": ["name", "password", "api_key", "email"]}}]),
+    )
+    entry = superuser_client.get(_history_url(g.pk)).json()["entries"][0]
+    structured_fields = entry["change_message_structured"][0]["changed"]["fields"]
+    # Sensitive names dropped:
+    assert "password" not in structured_fields
+    assert "api_key" not in structured_fields
+    # Non-sensitive names retained:
+    assert "name" in structured_fields
+    assert "email" in structured_fields
+
+
+@pytest.mark.django_db
+def test_structured_message_passes_through_unrecognised_shape(
+    superuser_client, django_user_model
+) -> None:
+    """An entry whose JSON parses but isn't the expected shape (a
+    hand-written one, or a future Django shape we don't know yet)
+    must not crash — degrade to the entry-as-is so we never 500
+    the history endpoint."""
+    g = Group.objects.create(name="g")
+    user = django_user_model.objects.filter(is_superuser=True).first()
+    _log(g, user, message=json.dumps([{"weird": {"unexpected": True}}]))
+    entry = superuser_client.get(_history_url(g.pk)).json()["entries"][0]
+    # Shape preserved; no exception:
+    assert entry["change_message_structured"] == [{"weird": {"unexpected": True}}]
+
+
+@pytest.mark.django_db
 def test_per_object_view_permission_denied_is_403(superuser_client: Client) -> None:
     """The per-object gate (history.py:88) must 403 once the object is
     known to exist but `has_view_permission(request, obj)` is False.
