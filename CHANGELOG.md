@@ -5,6 +5,22 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-05-31
+
+### Added
+- **`widget: "shuttle_h"` / `"shuttle_v"` hints** for `ModelAdmin.filter_horizontal`
+  / `filter_vertical` ([django-admin-react#627](https://github.com/MartinCastroAlvarez/django-admin-react/issues/627)). Mirrors the existing
+  `radio_fields` → `widget: "radio"` and `raw_id_fields` → `widget: "raw_id"` emission
+  pattern: a single per-field hint that tells SPA clients to render Django's two-pane
+  shuttle widget (with orientation) instead of a single-list checkbox bank. `raw_id`
+  still wins when a field is listed in both `raw_id_fields` and `filter_horizontal`
+  (the operator explicitly opted out of any large-set widget). Presentational only —
+  no permission, value, or write-path change.
+
+### Why a minor bump
+New wire vocabulary that didn't exist before. SPA clients that don't know the new
+hint values fall back to their default M2M render — backwards-compatible.
+
 ## [1.1.1] — 2026-05-31
 
 ### Documentation
