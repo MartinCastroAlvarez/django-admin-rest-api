@@ -5,6 +5,30 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] — 2026-05-31
+
+### Added
+- **`docs/api-contract.md`** (#35) — the full wire-contract reference
+  the rest of the docstrings have referenced. Every endpoint, every
+  envelope, every status code, with explicit semver commitment on
+  the documented surface.
+- **`examples/minimal_project/`** (#36) — a copy-pasteable runnable
+  Django project that consumes the package with the smallest wiring.
+  Includes one `ModelAdmin` with both a `batch` and a `detail` action
+  so a new consumer can see the signature dispatch in action without
+  any custom build.
+
+### Documentation
+- **Rate-limit recipe in `README.md`** (#40) — both `django-axes`
+  (lockout) and `django-ratelimit` (request/window) recipes for
+  protecting the auth + password endpoints in production. Moved out
+  of `SECURITY.md`'s "out of scope" footnote and into the main flow.
+- Pointer to `examples/minimal_project/` added near the top of the
+  install section.
+
+### Behavior
+- Doc / examples only. No code change.
+
 ## [1.0.9] — 2026-05-31
 
 ### Added
