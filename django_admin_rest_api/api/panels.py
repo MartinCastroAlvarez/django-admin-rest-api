@@ -1,21 +1,20 @@
-"""Per-model panel endpoint mixin (Issue #65).
-
-Wire contract: ``docs/extensions.md`` §2.
+"""Per-model panel endpoint (Issue #65).
 
 Consumers register custom data endpoints under a model's detail URL
 without re-implementing auth / model-resolution / permission gates.
-Opt-in via the ``PanelEndpointsMixin`` on a ``ModelAdmin``:
+
+The opt-in is **plain Django**: declare a ``panels`` dict directly on
+any ``ModelAdmin``. No package-specific mixin is required.
 
 ::
 
-    # Register your admin in the usual way — the mixin is orthogonal
-    # to whichever registration syntax (decorator or call form) you
-    # already use.
-    class InvoiceAdmin(PanelEndpointsMixin, admin.ModelAdmin):
+    class InvoiceAdmin(admin.ModelAdmin):
         panels = {"audit_trail": "get_audit_trail"}
 
         def get_audit_trail(self, request, obj):
             return {"entries": [...]}
+
+    # Then register the admin the usual way (decorator or call form).
 
 URL shape: ``GET …/<app>/<model>/<pk>/panel/<name>/``
 
@@ -30,6 +29,7 @@ Hard rules (`SECURITY.md` §3):
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 from typing import ClassVar
 
@@ -47,15 +47,30 @@ from django_admin_rest_api.api.writes import not_found_response
 
 
 class PanelEndpointsMixin:
-    """Opt-in mixin that declares custom panel endpoints on a ModelAdmin.
+    """Deprecated — kept as a no-op shim for backward compatibility (#34).
 
-    Map panel names to method names on the admin (a string, not a
-    callable, so the resolution path is auditable). Each method
-    receives ``(self, request, obj)`` and returns a JSON-serialisable
-    value.
+    The runtime resolves panels via plain ``getattr(model_admin,
+    "panels", {})`` regardless of whether the consumer mixes this
+    class in. Subclassing it is no longer required; declaring
+    ``panels = {...}`` directly on any ``ModelAdmin`` is enough.
+
+    A consumer who still mixes it in gets a single
+    ``DeprecationWarning`` at class-definition time. The shim will be
+    removed in a future major release; for now it stays so existing
+    code keeps working.
     """
 
     panels: ClassVar[dict[str, str]] = {}
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        warnings.warn(
+            "PanelEndpointsMixin is deprecated and no longer required. "
+            "Declare `panels = {...}` directly on your ModelAdmin — the "
+            "shim will be removed in a future major release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
 
 class PanelView(View):

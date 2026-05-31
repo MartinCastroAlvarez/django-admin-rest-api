@@ -5,6 +5,30 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] — 2026-05-31
+
+### Changed
+- **`PanelEndpointsMixin` is no longer required** to register panels
+  (#34). The runtime resolves panels via plain
+  `getattr(model_admin, "panels", {})` regardless of whether the
+  mixin is mixed in. Declare `panels = {...}` directly on any
+  `ModelAdmin` — the convention is now plain Django. The mixin
+  class is kept as a no-op shim for backward compatibility; consumers
+  who subclass it get a single `DeprecationWarning` at class-definition
+  time. It will be removed in a future major release.
+
+### Added
+- **`python manage.py admin_rest_api_check`** — smoke-test the
+  install (#37). Prints a one-screen health summary: the configured
+  `ADMIN_SITE` resolves, the three required middleware classes are
+  present, and every registered `ModelAdmin` is listed with its
+  action count (broken down by `batch` / `detail` target). Exits
+  non-zero on any problem — usable as a CI / deploy preflight.
+
+### Behavior
+- No breaking change. Existing code that subclassed
+  `PanelEndpointsMixin` keeps working (with one deprecation warning).
+
 ## [1.0.7] — 2026-05-31
 
 ### Infrastructure
