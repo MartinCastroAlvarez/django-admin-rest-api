@@ -66,6 +66,14 @@ HTML admin, this library exposes it over JSON.
 
 ---
 
+## 📓 Example consumer project
+
+A copy-pasteable Django project that consumes the package lives at
+[`examples/minimal_project/`](examples/minimal_project/). Use it to
+verify the install before adding `django-admin-rest-api` to a real
+project, or as a reference for the two-line wiring + a custom
+`ModelAdmin` with both `batch` and `detail` actions.
+
 ## 🚀 Plug-and-play install
 
 ```bash
@@ -229,6 +237,68 @@ See the upstream
 [`django-admin-react` SECURITY.md](https://github.com/MartinCastroAlvarez/django-admin-react/blob/main/SECURITY.md)
 for the full threat model — the API surface is identical and the
 guarantees transfer 1:1.
+
+### Recommended: rate-limit the auth + password endpoints
+
+The login and password endpoints are deliberately **not** rate-limited
+by this package — the HTML admin isn't either, and we don't want to
+duplicate behavior. **But you still need rate limiting in production.**
+A typical Django shop already has `django-axes` or `django-ratelimit`
+deployed against `/admin/login/`; the parallel JSON endpoint needs the
+same protection.
+
+**Option A: `django-axes`** (account-lockout-on-failed-attempts):
+
+```python
+# settings.py
+INSTALLED_APPS += ["axes"]
+MIDDLEWARE += [
+    # Must come AFTER AuthenticationMiddleware:
+    "axes.middleware.AxesMiddleware",
+]
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # hours
+```
+
+axes works without any package-specific config — it gates Django's
+`authenticate()` call, which is exactly the path
+`/api/v1/login/` runs through.
+
+**Option B: `django-ratelimit`** (request-per-window):
+
+Wrap the package's URL include with a ratelimited dispatcher in your
+project's `urls.py`:
+
+```python
+# your_project/urls.py
+from django.urls import include, path
+from django_ratelimit.decorators import ratelimit
+from django.views.decorators.csrf import csrf_protect
+from django.views.generic import View
+
+# 5 login attempts per minute per IP
+class RateLimitedAuthView(View):
+    @ratelimit(key="ip", rate="5/m", block=True)
+    def dispatch(self, request, *args, **kwargs):
+        from django_admin_rest_api.api.views.auth import LoginView
+        return LoginView.as_view()(request, *args, **kwargs)
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("admin-api/api/v1/login/", RateLimitedAuthView.as_view()),
+    path("admin-api/", include("django_admin_rest_api.urls")),
+]
+```
+
+(The literal `login/` path must come BEFORE the package include so
+Django's URL resolver hits the ratelimited dispatcher first.)
+
+Whichever you pick, deploy it on day one — there is no reason to wait
+for the first brute-force attempt.
 
 ---
 

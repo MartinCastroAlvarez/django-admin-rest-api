@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-admin-rest-api"
-version = "1.0.9"
+version = "1.0.10"
 description = "A JSON REST API for the Django admin — same permissions, same ModelAdmin, no new features. Powers django-admin-react and django-admin-mcp."
 authors = ["django-admin-rest-api contributors"]
 license = "MIT"
@@ -140,7 +140,7 @@ profile = "black"
 line_length = 100
 force_single_line = true
 known_first_party = ["django_admin_rest_api", "tests"]
-skip_glob = ["tests/test_project/migrations/*", "dist/*"]
+skip_glob = ["tests/test_project/migrations/*", "dist/*", "examples/*"]
 
 # --------------------------------------------------------------------------- #
 # flake8
