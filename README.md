@@ -167,11 +167,31 @@ DJANGO_ADMIN_REST_API = {
     "DEFAULT_PAGE_SIZE": 25,
     "MAX_PAGE_SIZE": 200,
 
+    # Cap on the number of pks per `actions/<name>/` POST. Mirrors
+    # MAX_PAGE_SIZE's DoS-guard posture for the changelist. Set to 0
+    # (or any non-positive value) to disable the cap entirely.
+    "MAX_ACTION_PKS": 5000,
+
     # When True, list responses include per-query timing in a debug
     # block. Off by default — only enable in development.
     "ENABLE_PROFILING": False,
 }
 ```
+
+### Startup-time validation
+
+The AppConfig registers three Django system checks that surface
+common install mistakes at `manage.py check` / `manage.py runserver`
+time rather than as a 500 on the first request:
+
+| ID | Severity | Catches |
+|----|----------|---------|
+| `django_admin_rest_api.W001` | warning | `DJANGO_ADMIN_REST_API_*` attribute typos (the canonical dict has exactly that name; any other prefix is silently ignored otherwise). |
+| `django_admin_rest_api.E001` | error   | `ADMIN_SITE` doesn't resolve to an `AdminSite` instance. |
+| `django_admin_rest_api.W002` | warning | `CsrfViewMiddleware` / `SessionMiddleware` / `AuthenticationMiddleware` missing from `settings.MIDDLEWARE`. |
+
+You don't have to enable them — they fire automatically on the next
+`manage.py` invocation after install.
 
 ---
 
@@ -232,10 +252,20 @@ configuration.
 - CSRF is enforced everywhere. No view in this package is
   `@csrf_exempt`. The login endpoint requires the CSRF cookie set
   by the consumer's shell.
+- **DoS guard on the actions runner.** `MAX_ACTION_PKS` (default
+  `5000`) caps the selection size of one action POST. Crafted
+  large-selection requests return `400` instead of pinning a
+  worker on an expensive action.
+- **Audit-log field-name redaction.** The history endpoint's
+  `change_message_structured` strips field names matching the
+  sensitive-name denylist (`password`, `token`, `secret`,
+  `api_key`, …) so the audit log can't be used as an oracle for
+  which sensitive fields were touched.
 
-See the upstream
+See [`SECURITY.md`](SECURITY.md) for the full threat model and the
+upstream
 [`django-admin-react` SECURITY.md](https://github.com/MartinCastroAlvarez/django-admin-react/blob/main/SECURITY.md)
-for the full threat model — the API surface is identical and the
+for the React-side surface — the API surface is identical and the
 guarantees transfer 1:1.
 
 ### Recommended: rate-limit the auth + password endpoints
@@ -317,6 +347,26 @@ poetry run bandit -c pyproject.toml -r django_admin_rest_api
 
 The test suite uses `pytest-django` + an in-memory SQLite database, so
 no setup beyond `poetry install`.
+
+### Smoke-test the install on a real project
+
+After dropping the package into your own Django project, run:
+
+```bash
+python manage.py admin_rest_api_check
+```
+
+It validates the configured `ADMIN_SITE`, the required middleware,
+and lists every registered `ModelAdmin` with its action count
+(`batch` / `detail` breakdown). Exits non-zero on any problem — also
+useful as a CI / deploy preflight.
+
+### Wire-contract reference
+
+The JSON shape of every endpoint is documented in
+[`docs/api-contract.md`](docs/api-contract.md). It is stable under
+semver: any rename, removal, or type change of a documented field
+requires a major version bump.
 
 ---
 
