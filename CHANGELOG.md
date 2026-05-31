@@ -5,6 +5,30 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] — 2026-05-31
+
+### Added
+- **Three Django system checks** that surface common install mistakes
+  at `manage.py runserver` / `manage.py check` time rather than as a
+  500 on the first request:
+  - **W001** (#31) — warns when a settings attribute starts with
+    `DJANGO_ADMIN_REST_API_` but isn't the canonical dict
+    (catches typos like `DJANGO_ADMIN_REST_API_CONFIG`).
+  - **E001** (#32) — errors when `ADMIN_SITE` doesn't resolve to an
+    `AdminSite` instance.
+  - **W002** (#33) — warns for each required Django middleware
+    (`CsrfViewMiddleware`, `SessionMiddleware`, `AuthenticationMiddleware`)
+    missing from `settings.MIDDLEWARE`.
+- **Auto-created GitHub Releases** on every tag push. The publish
+  workflow now extracts the matching CHANGELOG section and creates
+  the GitHub Release (with `--latest` for stable versions, `--prerelease`
+  for `aN` / `bN` / `rcN` suffixes) so the repo's Releases panel
+  stays in sync with PyPI.
+
+### Behavior
+- No breaking change. The checks emit warnings (not errors) where the
+  consumer might have a legitimate equivalent.
+
 ## [1.0.8] — 2026-05-31
 
 ### Changed
