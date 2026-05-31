@@ -25,3 +25,9 @@ class DjangoAdminRestApiConfig(AppConfig):
     label = "django_admin_rest_api"
     verbose_name = "Django Admin REST API"
     default_auto_field = "django.db.models.BigAutoField"
+
+    def ready(self) -> None:  # pragma: no cover — registration shim
+        # Importing the module is enough — the `@register` decorators
+        # at module-level wire the checks into Django's system check
+        # framework. See `system_checks.py` for the catalogue.
+        from django_admin_rest_api import system_checks  # noqa: F401

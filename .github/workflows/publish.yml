@@ -36,8 +36,11 @@ jobs:
 
     # OIDC: the runner needs to mint a JWT for PyPI. `id-token: write`
     # is the GitHub Actions permission that enables that.
+    # `contents: write` lets the same job auto-create the matching
+    # GitHub Release after the publish lands.
     permissions:
       id-token: write
+      contents: write
 
     # The Deployments tab is keyed off this environment name. The
     # `url:` makes the deployment card link to the published PyPI page.
@@ -73,3 +76,41 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+      - name: Extract release notes from CHANGELOG
+        # Pull the section for THIS tag's version out of CHANGELOG.md
+        # so the GitHub Release body matches the changelog entry
+        # verbatim. `awk` slice: print lines from the matching
+        # `## [<version>]` header up to (but not including) the next
+        # `## [` header.
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "body<<__NOTES_EOF__"
+            awk -v ver="$VERSION" '
+              $0 ~ "^## \\[" ver "\\]" { capture=1; next }
+              capture && /^## \[/ { exit }
+              capture { print }
+            ' CHANGELOG.md
+            echo "__NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        # `gh release create --latest` updates the sidebar; pre-release
+        # versions (`aN`/`bN`/`rcN` suffix) get `--prerelease` instead.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Detect pre-release suffixes (e.g. 1.2.3a0, 0.4.0rc1).
+          PRERELEASE_FLAG="--latest"
+          if [[ "$VERSION" =~ (a|b|rc)[0-9]+$ ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "${GITHUB_REF_NAME} — see CHANGELOG" \
+            --notes "${NOTES:-Release ${GITHUB_REF_NAME}.}" \
+            $PRERELEASE_FLAG
