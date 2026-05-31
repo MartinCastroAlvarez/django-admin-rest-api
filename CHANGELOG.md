@@ -5,6 +5,24 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-05-31
+
+### Added
+- **`widget: "custom"` + `widget_class: "<dotted-path>"` hints** for
+  fields whose bound form widget lives outside `django.*`
+  ([django-admin-react#625](https://github.com/MartinCastroAlvarez/django-admin-react/issues/625)). Catches the consumer's
+  `formfield_overrides = {MyField: {"widget": MyCustomWidget}}`
+  patterns + custom Form classes + third-party widget libraries.
+  SPA clients that don't have a plugin registration for the widget
+  class fall back to the field's default render — backwards-
+  compatible. Precedence: earlier hints (`radio_fields`,
+  `raw_id_fields`, `filter_horizontal`, `PasswordInput`) win.
+
+### Why a minor bump
+New optional wire field (`widget_class`) and new `widget` vocabulary
+value (`"custom"`). Backwards-compatible — SPA clients ignoring
+unknown widget values fall through to the existing render path.
+
 ## [1.2.0] — 2026-05-31
 
 ### Added

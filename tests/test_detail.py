@@ -835,6 +835,137 @@ def test_raw_id_fields_wins_over_filter_horizontal_when_both_declared() -> None:
     assert _descriptor_for(name="permissions", **common)["widget"] == "raw_id"
 
 
+# A custom widget that lives outside ``django.*`` — declared at module
+# scope so its ``__module__`` is reliably ``tests.test_detail`` (not
+# the class body of one of the test functions). Inherits from the
+# stock ``Widget`` so Django's form-field machinery accepts it (the
+# detection keys on the SUBCLASS's ``__module__``, not the
+# inheritance chain — that's the whole point: a markdown editor /
+# color picker subclassing ``Widget`` IS a custom widget).
+from django.forms.widgets import Widget as _DjangoFormsWidget  # noqa: E402
+
+
+class _ConsumerCustomWidget(_DjangoFormsWidget):  # noqa: D101 — test fixture only
+    """Stand-in for a third-party widget the SPA wouldn't know
+    natively (e.g. a markdown editor, color picker, signature pad)."""
+
+
+@pytest.mark.django_db
+def test_custom_widget_surfaces_widget_class_hint() -> None:
+    """A form field whose widget class lives OUTSIDE ``django.*``
+    surfaces as ``widget: "custom"`` + a ``widget_class`` dotted path
+    so SPA plugins can dispatch on it (#625). Subclassing-of-stock
+    isn't sufficient — the class's own ``__module__`` is what we check,
+    so a widget defined in ``mypackage.widgets`` is custom even if it
+    inherits from ``django.forms.widgets.TextInput``."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.db import models
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    class _CustomFormFieldsAdmin(admin.ModelAdmin):
+        formfield_overrides = {
+            models.CharField: {"widget": _ConsumerCustomWidget},
+        }
+
+    model_admin = _CustomFormFieldsAdmin(Group, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="custom-widget-su",
+        email="custom@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Group,
+        model_admin=model_admin,
+        obj=Group(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    desc = _descriptor_for(name="name", **common)
+    assert desc.get("widget") == "custom", desc
+    assert desc.get("widget_class") == "tests.test_detail._ConsumerCustomWidget", desc
+
+
+@pytest.mark.django_db
+def test_stock_django_widget_does_not_emit_custom_hint() -> None:
+    """A plain ``CharField`` on the model uses a stock Django widget
+    (``TextInput``) — must NOT surface as ``widget: "custom"`` (#625).
+    Catches the regression where the detection over-fires."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    model_admin = admin.ModelAdmin(Group, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="stock-widget-su",
+        email="stock@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Group,
+        model_admin=model_admin,
+        obj=Group(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    desc = _descriptor_for(name="name", **common)
+    assert "widget" not in desc, desc
+    assert "widget_class" not in desc, desc
+
+
+@pytest.mark.django_db
+def test_radio_fields_wins_over_custom_widget_detection() -> None:
+    """Earlier hint claims (``radio_fields``, ``raw_id_fields``,
+    ``filter_horizontal``, ``PasswordInput``) take precedence over the
+    custom-widget detection. Otherwise a consumer using a custom Select
+    subclass with ``radio_fields`` would lose the radio hint (#625)."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Permission
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _descriptor_for
+
+    class _RadioAdmin(admin.ModelAdmin):
+        radio_fields = {"content_type": admin.HORIZONTAL}
+
+    model_admin = _RadioAdmin(Permission, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="radio-wins-su",
+        email="radio-wins@example.com",
+        password="x",  # noqa: S106
+    )
+    form = model_admin.get_form(request, obj=None)()
+    common = dict(
+        model=Permission,
+        model_admin=model_admin,
+        obj=Permission(),
+        form=form,
+        is_readonly=False,
+        admin_site=admin.site,
+        request=request,
+    )
+    desc = _descriptor_for(name="content_type", **common)
+    assert desc["widget"] == "radio"
+    # The custom-widget detection MUST NOT also tack on a widget_class.
+    assert "widget_class" not in desc
+
+
 @pytest.mark.django_db
 def test_formfield_overrides_textarea_promotes_string_to_text() -> None:
     """A CharField the admin overrides with a ``Textarea`` via

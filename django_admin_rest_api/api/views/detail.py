@@ -455,6 +455,35 @@ def _apply_widget_override(descriptor: dict[str, Any], form_field: Any) -> None:
     ):
         descriptor["type"] = "string"
 
+    # Custom widget detection (#625). If the bound form field's widget
+    # class lives OUTSIDE Django's own ``django.*`` widget tree, it
+    # came from the consumer's own code — via ``formfield_overrides``,
+    # ``formfield_for_dbfield``, a custom Form class, or a third-party
+    # widget library. Emit a ``widget: "custom"`` hint plus the
+    # widget's dotted Python path so SPA-side plugin registrations
+    # can dispatch on it. A subclass of a stock widget (e.g.
+    # ``MyAttrInput(TextInput)``) stays NOT marked custom — the
+    # default render path for the field's ``type`` still works for it
+    # since the attribute-level differences don't change the wire
+    # contract.
+    #
+    # The hint is only set when no earlier branch (``radio_fields`` /
+    # ``raw_id_fields`` / ``filter_horizontal`` / ``PasswordInput``)
+    # already claimed ``descriptor["widget"]`` — those wins are
+    # specific opt-ins that the operator chose explicitly and that the
+    # SPA already has dedicated renders for.
+    if "widget" not in descriptor:
+        widget_module = type(widget).__module__
+        if not widget_module.startswith("django."):
+            # Stock Django widgets we'd accidentally catch via
+            # subclassing chains (e.g. an admin widget subclassing a
+            # stock one but living in ``django.contrib.admin``) are
+            # excluded by the ``django.`` prefix above. Truly custom
+            # widget classes (from a consumer's app or a third-party
+            # package) flow through here.
+            descriptor["widget"] = "custom"
+            descriptor["widget_class"] = f"{widget_module}.{type(widget).__name__}"
+
 
 # Form-field-class → wire type. Mirrors `_TYPE_BY_INTERNAL` in
 # serializers.py but for Django's `forms.*` field classes (used by a
