@@ -5,6 +5,22 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-05-31
+
+### Documentation
+- **README sync** to fully reflect 1.0.7 – 1.1.0. Added
+  `MAX_ACTION_PKS` to the Configuration block; documented the
+  three startup system checks (W001 / E001 / W002); surfaced the
+  DoS guard + history field-name redaction in the Security
+  section; added a "Smoke-test the install" subsection pointing at
+  `python manage.py admin_rest_api_check`; added a "Wire-contract
+  reference" subsection pointing at `docs/api-contract.md`. Pushes
+  the updated README to PyPI so consumers landing on the project
+  page see the current surface.
+
+### Behavior
+- Docs only. No code change.
+
 ## [1.1.0] — 2026-05-31
 
 ### Added
