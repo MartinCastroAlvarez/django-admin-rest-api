@@ -64,6 +64,37 @@ build:
   the same per-object permission gate over the selection — there is
   no "skip permissions for batches" code path.
 
+## Security logging
+
+The package emits one structured record on the dedicated
+`django_admin_rest_api.security` logger at each authorization-denial
+boundary — a 403 permission/session-expiry denial
+(`api/permissions.forbidden_response`) and a failed login
+(`api/views/auth`). Each record carries `{user, path, method, decision}`,
+where `user` is the surrogate pk (or `"anon"`) and `decision` is one of
+`forbidden` / `session_expired` / `login_failed`. The password and any
+other request-body PII are **never** logged. Wire the logger into your
+project's `LOGGING` config to alert on credential-stuffing,
+permission-probing, and IDOR-scan patterns:
+
+```python
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"security": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "django_admin_rest_api.security": {
+            "handlers": ["security"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+```
+
+Successful (allowed) requests are intentionally not logged here — only
+denials — so the channel stays signal-rich for alerting.
+
 ## Cross-references
 
 - Upstream threat model:

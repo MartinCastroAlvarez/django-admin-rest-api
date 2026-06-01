@@ -51,6 +51,7 @@ in ``SECURITY.md`` (QSEC-2026-05-25-01).
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -62,6 +63,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 
 from django_admin_rest_api.api.permissions import is_admin_user
+from django_admin_rest_api.api.permissions import log_security_event
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.views.base import BaseAPIView
 
@@ -85,8 +87,17 @@ def _error(code: str, message: str, status: int) -> HttpResponse:
     return _no_store(JsonResponse({"error": {"code": code, "message": message}}, status=status))
 
 
-def _invalid_credentials() -> HttpResponse:
-    """The single generic credentials-rejected response (HTTP 403)."""
+def _invalid_credentials(request: HttpRequest | None = None) -> HttpResponse:
+    """The single generic credentials-rejected response (HTTP 403).
+
+    Emits a structured ``django_admin_rest_api.security`` record at the
+    failed-login boundary (#67) so operators can alert on credential
+    stuffing. The password is never read into the record — only
+    ``{user, path, method, decision=login_failed}``.
+    """
+    # Best-effort: observability must never turn a 403 into a 500.
+    with contextlib.suppress(Exception):  # pragma: no cover — logging must not break the response
+        log_security_event(request, "login_failed")
     return _error(_INVALID_CODE, _INVALID_MESSAGE, 403)
 
 
@@ -138,7 +149,7 @@ class LoginView(BaseAPIView):
         # server error — collapse it into the same generic rejection so
         # the shape of the failure never varies.
         if not isinstance(username, str) or not isinstance(password, str):
-            return _invalid_credentials()
+            return _invalid_credentials(request)
 
         # ``authenticate`` returns ``None`` for an unknown username, a
         # wrong password, OR an inactive user (ModelBackend rejects
@@ -146,7 +157,7 @@ class LoginView(BaseAPIView):
         # collapse into the same branch.
         user = authenticate(request, username=username, password=password)
         if user is None:
-            return _invalid_credentials()
+            return _invalid_credentials(request)
 
         # Apply the package's access policy BEFORE creating a session.
         # ``is_admin_user`` reads ``request.user``; set the candidate so
@@ -156,7 +167,7 @@ class LoginView(BaseAPIView):
         request.user = user
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
-            return _invalid_credentials()
+            return _invalid_credentials(request)
 
         # Policy passed — establish the session. ``login()`` rotates the
         # session key (session-fixation defense) and writes the auth
