@@ -136,7 +136,8 @@ Response:
 | `label`       | Resolved label (`label_for_field` / `short_description` / verbose name). |
 | `sortable`    | `True` if the column appears in `get_sortable_by(request)`. |
 | `editable`    | `True` if in `list_editable`. |
-| `links`       | `True` if in `get_list_display_links` (the SPA links these to detail). |
+
+The changelist payload also carries a top-level **`list_display_links`** array: the column name(s) the SPA should link to the change page, resolved from `ModelAdmin.get_list_display_links(request, list_display)`. It honors `list_display_links = None` (linking disabled) by emitting `[]`, and the default (link the first column) otherwise. Only string column names round-trip; callable `list_display` entries are dropped.
 
 ### 3.3 `results[]`
 

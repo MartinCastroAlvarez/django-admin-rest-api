@@ -131,6 +131,44 @@ Every endpoint enforces the same permission gates as the HTML admin.
 
 ---
 
+## 🧩 ModelAdmin carry-through status
+
+The package duck-types `ModelAdmin` and surfaces a wide slice of its
+configuration on the wire. This table is the honest at-a-glance answer to
+"will my gnarly admin just work?" — **Honored** (carried through and
+tested), **Partial** (surfaced with a documented caveat), **Not yet**
+(no signal emitted today).
+
+| ModelAdmin hook | Status | Notes |
+| --------------- | ------ | ----- |
+| `list_display` (+ `@admin.display` callables) | Honored | Methods resolve via `lookup_field`. |
+| `list_display_links` | Honored | Top-level `list_display_links` array on the changelist; `None` → `[]`. |
+| `list_filter` (Simple / boolean / choice / FK / date / related-path) | Honored | FK filters carry `autocomplete:true`. |
+| `search_fields` / `search_help_text` / `get_search_results` | Honored | |
+| `get_ordering` / `get_sortable_by` / `ordering` | Honored | |
+| `date_hierarchy` | Honored | |
+| `list_editable` (bulk save) | Honored | Via `PATCH .../bulk/`. |
+| `list_select_related` / `get_queryset` | Honored | N+1 guard on list **and** inlines. |
+| `actions` (batch + detail) | Honored | One runner serves both shapes. |
+| `fieldsets` / `get_fieldsets` (+ classes / description) | Honored | |
+| `get_readonly_fields` | Honored | |
+| `inlines` (Stacked / Tabular) — read | Honored | FK/M2M columns select_related / prefetch_related. |
+| `raw_id_fields` / `radio_fields` / `filter_horizontal` / `filter_vertical` | Honored | Emitted as `widget` hints. |
+| `formfield_overrides` | Honored | Reconciled into `widget` / `type`. |
+| `save_as` / `save_on_top` / save-flow buttons | Honored | |
+| `empty_value_display` / `message_user` / `view_on_site` | Honored | |
+| `show_full_result_count` / `list_max_show_all` | Honored | |
+| custom `AdminSite` / `get_app_list` | Honored | Via `DJANGO_ADMIN_REST_API["ADMIN_SITE"]`. |
+| `change_password_form` (UserAdmin) | Honored | `…/<pk>/password/`. |
+| `prepopulated_fields` | Honored | `{target:[sources]}` on the add form-spec / `/add/` schema. |
+| `autocomplete_fields` | Partial | Endpoint exists; a `widget:"autocomplete"` hint is emitted **only** when the target admin declares `search_fields`. Authorization is target-`has_view_permission` based (slightly broader than Django's source-relation check). |
+| `change_form_template` / `add_form_template`, overridden `change_view` / `add_view` | Partial | Surfaced via the `legacy-iframe` renderer (embed the legacy page); not rebuilt as JSON. Overrides must stay GET-idempotent (see SECURITY.md). |
+| date `list_filter` range UX | Partial | Surfaced as `{type:"date"}` with exact-match; range UI deferred. |
+| `get_urls` custom views | Not yet | No generic passthrough (by design — use the SPA's own routes or an iframe). |
+| Generic inlines (`GenericTabularInline` / `GenericStackedInline`) | Not yet | Not specifically handled. |
+
+---
+
 ## 📸 Screenshots
 
 The JSON `registry` endpoint — the source-of-truth for any consumer
