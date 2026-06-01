@@ -49,6 +49,7 @@ class SchemaView(View):
     http_method_names = ["get"]
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Return the static OpenAPI 3.1 document for the API (contract §8)."""
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
             return forbidden_response(request)

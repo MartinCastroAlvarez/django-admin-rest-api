@@ -57,6 +57,7 @@ class AddFormView(View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
+        """Return the empty create form descriptor for the model (contract §5.1)."""
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
             return forbidden_response(request)

@@ -88,6 +88,11 @@ class PanelView(View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
+        """Render one opt-in ``ModelAdmin.panels`` entry for an instance.
+
+        Admins that don't declare ``panels`` return 404 on every panel
+        URL; an unknown ``panel_name`` is likewise a 404.
+        """
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
             return forbidden_response(request)

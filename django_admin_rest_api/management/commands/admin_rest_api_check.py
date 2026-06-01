@@ -31,6 +31,8 @@ REQUIRED_MIDDLEWARE: tuple[str, ...] = (
 
 
 class Command(BaseCommand):
+    """``admin_rest_api_check`` management command — install smoke test."""
+
     help = (
         "Smoke-test the django-admin-rest-api install: validates the configured "
         "ADMIN_SITE, required middleware, and lists every registered ModelAdmin "
@@ -38,6 +40,7 @@ class Command(BaseCommand):
     )
 
     def handle(self, *args: Any, **options: Any) -> None:
+        """Print the health summary and exit non-zero if anything is off."""
         problems: list[str] = []
         out = self.stdout.write
         ok = self.style.SUCCESS

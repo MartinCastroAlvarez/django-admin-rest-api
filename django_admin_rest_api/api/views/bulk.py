@@ -76,6 +76,7 @@ class BulkUpdateView(View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
+        """Apply the same partial update to many instances (contract §5.5)."""
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
             return forbidden_response(request)

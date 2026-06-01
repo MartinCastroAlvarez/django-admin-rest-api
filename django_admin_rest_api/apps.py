@@ -27,6 +27,7 @@ class DjangoAdminRestApiConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self) -> None:  # pragma: no cover — registration shim
+        """Wire the package's system checks into Django on app load."""
         # Importing the module is enough — the `@register` decorators
         # at module-level wire the checks into Django's system check
         # framework. See `system_checks.py` for the catalogue.
