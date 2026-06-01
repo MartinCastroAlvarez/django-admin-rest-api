@@ -38,6 +38,7 @@ from django.contrib.admin.options import ModelAdmin
 from django.db.models import Model
 from django.forms import Widget
 from django.http import HttpRequest
+from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch
 from django.urls import reverse
 
@@ -192,6 +193,76 @@ def widget_object(form_field: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Legacy-template escape hatch                                                 #
 # --------------------------------------------------------------------------- #
+# The final candidate Django's admin always appends to the change/add form
+# template list (``ModelAdmin.render_change_form``). Its presence in a
+# ``TemplateResponse.template_name`` means "this is the stock change form" —
+# i.e. exactly what the JSON form-spec is able to reproduce.
+_STANDARD_CHANGE_FORM_TEMPLATE: Final[str] = "admin/change_form.html"
+
+
+def _renders_custom_template(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    obj: Any,
+    *,
+    change: bool,
+) -> bool:
+    """Return ``True`` if the ModelAdmin's *overridden* add/change view
+    renders something other than the stock admin change form.
+
+    This catches the common pattern the ``change_form_template`` attribute
+    check misses: a ``change_view`` (or ``add_view``) override that branches
+    on ``request.GET`` and ``render(...)``s a hand-rolled template — e.g.
+    ``def change_view(self, request, ...): if request.GET.get("run_custom"):
+    return self.run_custom_view(...)``. There is no template *attribute* to
+    inspect, only the response the view actually returns.
+
+    Only probes when the view method is genuinely overridden — a stock
+    ``ModelAdmin`` never pays this cost. The view is invoked with the real
+    (GET) form-spec request, so a request-aware override resolves the same
+    branch the SPA / legacy admin would. A lazy ``TemplateResponse`` carrying
+    ``admin/change_form.html`` is the stock form (→ render the JSON spec);
+    anything else — a different template, a ``render()`` ``HttpResponse``, a
+    redirect — means the SPA can't reproduce it, so fall back to the iframe.
+
+    On any probe error the safe default is ``False`` (render the JSON spec),
+    matching the conservative fall-through used elsewhere in this module.
+    """
+    base = ModelAdmin.change_view if change else ModelAdmin.add_view
+    overridden = type(model_admin).change_view if change else type(model_admin).add_view
+    if overridden is base:
+        return False
+    try:
+        if change:
+            response = model_admin.change_view(request, str(obj.pk))
+        else:
+            response = model_admin.add_view(request)
+    except Exception:  # noqa: BLE001 — a view that errs on probe falls back to the JSON spec
+        logger.warning(
+            "form-spec legacy probe: %s.%s_view raised; rendering JSON spec instead",
+            type(model_admin).__qualname__,
+            "change" if change else "add",
+            exc_info=True,
+        )
+        return False
+    if isinstance(response, TemplateResponse):
+        # ``template_name`` may be a single name, a ``Template`` instance, or
+        # a list mixing both. Only the stock string list carries
+        # ``admin/change_form.html``; a bare ``Template`` (compiled custom
+        # template) is custom by definition.
+        raw = response.template_name
+        if isinstance(raw, str):
+            names = [raw]
+        elif isinstance(raw, list | tuple):
+            names = [n for n in raw if isinstance(n, str)]
+        else:
+            names = []
+        return _STANDARD_CHANGE_FORM_TEMPLATE not in names
+    # A non-``TemplateResponse`` (a ``render()`` HttpResponse, a redirect, a
+    # JsonResponse, …) is by definition not the stock change form.
+    return True
+
+
 def _legacy_renderer(
     model_admin: ModelAdmin,
     request: HttpRequest,
@@ -203,20 +274,26 @@ def _legacy_renderer(
 ) -> dict[str, Any] | None:
     """Return a ``legacy-iframe`` renderer payload, or ``None``.
 
-    When the ModelAdmin overrides ``change_form_template`` (change view) or
-    ``add_form_template`` (add view), the SPA cannot faithfully render the
-    form from the JSON spec — the integrator deliberately hand-rolled the
-    HTML. Rather than silently drop their customisation (README #624), the
-    spec tells the client to embed the legacy admin change/add page in an
+    Two cases route to the iframe escape hatch, because in neither can the
+    SPA faithfully rebuild the form from the JSON spec:
+
+    1. The ModelAdmin sets ``change_form_template`` (change view) or
+       ``add_form_template`` (add view) — a declared custom template.
+    2. The ModelAdmin overrides ``change_view`` / ``add_view`` and that
+       override renders a non-standard template for *this* request (e.g. a
+       ``?run_custom=1`` branch that returns a custom dual-listbox page).
+
+    Rather than silently drop the integrator's customisation (README #624),
+    the spec tells the client to embed the legacy admin change/add page in an
     iframe for *that one view*. The rest of the SPA shell is untouched.
 
-    Returns ``None`` (→ render the normal spec) when no template override is
-    set, or when the legacy admin URL can't be reversed (the integrator may
-    have unmounted ``django.contrib.admin`` entirely — in that case there's
+    Returns ``None`` (→ render the normal spec) when neither case applies, or
+    when the legacy admin URL can't be reversed (the integrator may have
+    unmounted ``django.contrib.admin`` entirely — in that case there's
     nothing to iframe, so fall through to the JSON spec).
     """
     template = getattr(model_admin, "change_form_template" if change else "add_form_template", None)
-    if not template:
+    if not template and not _renders_custom_template(model_admin, request, obj, change=change):
         return None
     site_name = getattr(getattr(model_admin, "admin_site", None), "name", "admin")
     view = "change" if change else "add"

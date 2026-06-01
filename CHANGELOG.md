@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-06-02
+
+### Added
+- **Form-spec `legacy-iframe` detection now covers request-driven custom
+  views**, not just the `change_form_template` / `add_form_template`
+  attribute. When a `ModelAdmin` overrides `change_view` / `add_view` and
+  renders a non-standard template for a request (e.g. a `?run_custom=1`
+  branch that returns a hand-rolled `render(...)`), the resolver probes the
+  view and — when the response is not the stock `admin/change_form.html` —
+  returns `{ "renderer": "legacy-iframe", "legacy_url": … }` with the
+  querystring preserved. The probe only fires when the view is actually
+  overridden, so a stock `ModelAdmin` pays nothing; a view that errors on
+  probe falls back to the JSON spec. This closes the last gap for "any
+  ModelAdmin that runs on legacy `/admin/` runs on the SPA with at most a
+  single-view iframe fallback" (#59 / react #659 / mcp #70).
+- **`Job` cross-repo fixture app** in the test project exercising every
+  documented hook the pattern uses (`formfield_for_dbfield`, an admin
+  `action`, a `change_view` branch, a custom dual-listbox template) — Path A
+  (stock form-spec, large-textarea `metadata`) and Path B (`?run_custom=1`
+  → `legacy-iframe`).
+
 ## [1.4.0] — 2026-06-01
 
 ### Added
