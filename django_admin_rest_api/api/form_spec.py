@@ -414,7 +414,7 @@ def build_form_spec(
                 entry[extra] = base[extra]
         fields[name] = entry
 
-    return {
+    payload: dict[str, Any] = {
         "renderer": "form-spec",
         "fieldsets": _fieldsets_payload(model_admin, request, obj, visible_names),
         "fields": fields,
@@ -424,3 +424,42 @@ def build_form_spec(
         # detect (and cache-key on) the switch. Stable for a fixed request.
         "variant": f"{type(form).__module__}.{type(form).__qualname__}",
     }
+    # prepopulated_fields (#72): only meaningful on the ADD form — Django
+    # slugifies the target from its sources as the user types a *new* object.
+    # The add-form schema endpoint (`/add/`) already emits this; surface it on
+    # the add form-spec too so a client that renders from the form-spec gets
+    # the same slugify-on-keystroke signal.
+    if not change:
+        payload["prepopulated_fields"] = prepopulated_fields_payload(
+            model_admin, request, list(visible_names), readonly
+        )
+    return payload
+
+
+def prepopulated_fields_payload(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    visible_names: list[str],
+    readonly: set[str],
+) -> dict[str, list[str]]:
+    """Build the ``{target: [sources]}`` prepopulated-fields block (#72 / #245).
+
+    Returns ``ModelAdmin.get_prepopulated_fields(request, None)`` restricted to
+    rendered, non-readonly targets with at least one rendered source. A
+    misbehaving override degrades to ``{}`` rather than 500 the form. Shared by
+    the add form-spec and the add-form schema endpoint so both agree.
+    """
+    try:
+        raw = model_admin.get_prepopulated_fields(request, None) or {}
+    except Exception:  # pragma: no cover — admin author error
+        logger.warning("get_prepopulated_fields failed; none surfaced", exc_info=True)
+        return {}
+    visible = set(visible_names)
+    out: dict[str, list[str]] = {}
+    for target, sources in raw.items():
+        if target not in visible or target in readonly:
+            continue
+        kept = [s for s in sources if s in visible]
+        if kept:
+            out[target] = kept
+    return out

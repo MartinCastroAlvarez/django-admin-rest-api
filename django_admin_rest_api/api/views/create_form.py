@@ -29,6 +29,7 @@ from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
 
+from django_admin_rest_api.api.form_spec import prepopulated_fields_payload
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
@@ -216,26 +217,9 @@ def _prepopulated_payload(
 ) -> dict[str, list[str]]:
     """Build the ``prepopulated_fields`` block (#245).
 
-    Returns ``{target: [sources]}`` from ``ModelAdmin.prepopulated_fields``,
-    restricted to fields actually rendered: a target that's readonly or not
-    in the form is dropped (it can't be filled), and source names the form
-    doesn't render are filtered out. A target left with no usable sources is
-    omitted. The client slugifies the target from its sources while typing.
+    Thin wrapper over the shared
+    :func:`~django_admin_rest_api.api.form_spec.prepopulated_fields_payload`
+    so the add-form schema endpoint and the add form-spec emit the identical
+    ``{target: [sources]}`` shape (#72).
     """
-    # Best-effort: a consumer ``get_prepopulated_fields`` override may raise;
-    # degrade to "no prepopulation" rather than 500 the form. Kept broad on
-    # purpose; logged.
-    try:
-        raw = model_admin.get_prepopulated_fields(request, None) or {}
-    except Exception:  # pragma: no cover — admin author error
-        logger.warning("get_prepopulated_fields failed; none surfaced", exc_info=True)
-        return {}
-    visible = set(visible_names)
-    out: dict[str, list[str]] = {}
-    for target, sources in raw.items():
-        if target not in visible or target in readonly:
-            continue
-        kept = [s for s in sources if s in visible]
-        if kept:
-            out[target] = kept
-    return out
+    return prepopulated_fields_payload(model_admin, request, visible_names, readonly)

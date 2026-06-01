@@ -334,3 +334,76 @@ def test_form_extra_charfield_with_textarea_widget_becomes_text_type(
         response = superuser_client.get(ADD_URL)
         fields = response.json()["fields"]
         assert fields["note"]["type"] == "text"
+
+
+# --------------------------------------------------------------------------- #
+# autocomplete_fields hint (#72)                                              #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_autocomplete_field_hint_on_add_form() -> None:
+    """A relation in ``autocomplete_fields`` whose target admin declares
+    ``search_fields`` gets ``widget: "autocomplete"`` on the descriptor (#72)."""
+    from contextlib import contextmanager
+
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.views.detail import _is_autocomplete_field
+
+    User = get_user_model()
+    user_admin = admin.site._registry[User]
+    group_admin = admin.site._registry[Group]
+    request = RequestFactory().get("/")
+    request.user = User.objects.create_superuser(
+        username="ac-su", email="ac@example.com", password="x"
+    )
+
+    @contextmanager
+    def _set(obj, **attrs):
+        old = {k: getattr(obj, k, None) for k in attrs}
+        for k, v in attrs.items():
+            setattr(obj, k, v)
+        try:
+            yield
+        finally:
+            for k, v in old.items():
+                setattr(obj, k, v)
+
+    # ``groups`` is a M2M on User → Group. Mark it autocomplete and give the
+    # Group admin search_fields so the typeahead has something to query.
+    with (
+        _set(user_admin, autocomplete_fields=("groups",)),
+        _set(group_admin, search_fields=("name",)),
+    ):
+        assert _is_autocomplete_field(user_admin, User, "groups", request, admin.site) is True
+
+    # No search_fields on the target → no hint (typeahead would have nothing
+    # to search), so the client should render a plain select instead.
+    with _set(user_admin, autocomplete_fields=("groups",)), _set(group_admin, search_fields=()):
+        assert _is_autocomplete_field(user_admin, User, "groups", request, admin.site) is False
+
+    # Not listed in autocomplete_fields → no hint.
+    with _set(user_admin, autocomplete_fields=()), _set(group_admin, search_fields=("name",)):
+        assert _is_autocomplete_field(user_admin, User, "groups", request, admin.site) is False
+
+
+@pytest.mark.django_db
+def test_add_form_spec_carries_prepopulated_fields() -> None:
+    """The add form-spec (build_form_spec, obj=None) emits prepopulated_fields (#72)."""
+    from django.contrib import admin
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.form_spec import build_form_spec
+
+    User = get_user_model()
+    request = RequestFactory().get("/")
+    request.user = User.objects.create_superuser(
+        username="pp-su", email="pp@example.com", password="x"
+    )
+    spec = build_form_spec(Group, admin.site._registry[Group], request, None, admin_site=admin.site)
+    # Stock GroupAdmin declares no prepopulated_fields → key present, empty.
+    assert spec["prepopulated_fields"] == {}

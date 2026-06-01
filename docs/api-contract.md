@@ -198,6 +198,7 @@ Single-object descriptor for the change page:
 - `password_change.available = true` iff the admin declares `change_password_form` (i.e. `UserAdmin`).
 - `object_actions` shares the shape and source of `actions` on the list response — the consumer renders detail-target actions here. Clicks POST to the same runner URL as the changelist actions.
 - `fields[*].type` is one of the documented kinds: `string`, `integer`, `decimal`, `float`, `boolean`, `date`, `datetime`, `time`, `duration`, `uuid`, `json`, `array`, `range`, `foreign_key`, `many_to_many`, `file`, `email`, `url`, `image`, `unsupported`.
+- `fields[*].widget` is an optional presentational hint mirroring the `ModelAdmin` relation widgets: `radio` (`radio_fields`), `raw_id` (`raw_id_fields`), `shuttle_h` / `shuttle_v` (`filter_horizontal` / `filter_vertical`), `autocomplete` (a relation in `get_autocomplete_fields(request)` **whose target admin declares `search_fields`** — otherwise no hint), `password` / `textarea` (resolved from the bound form widget). Absent when the default control applies. (The form-spec §4.1 carries the same information in its closed `widget.kind` enum.)
 
 ### 4.1 `GET /api/v1/<app>/<model>/<pk>/form-spec/` and `…/add/form-spec/` — ModelAdmin form spec
 
@@ -268,6 +269,12 @@ Normal response (`renderer: "form-spec"`):
   re-runs the **same** resolved `get_form` through `is_valid()` and returns
   per-field errors under `fields[<name>]` — request-aware validation is
   identical across SPA, MCP, and the legacy admin.
+- On the **add** form-spec (`…/add/form-spec/`, `obj=None`) the payload also
+  carries `prepopulated_fields` — a `{target: [sources]}` map from
+  `ModelAdmin.prepopulated_fields`, restricted to rendered, non-readonly
+  targets — so a client can slugify-on-keystroke exactly like the legacy
+  add page. (Same shape the add-form schema endpoint `/add/` already emits.)
+  Absent / `{}` on the change form-spec.
 
 Escape hatch — when the form can't be faithfully rendered from JSON, the
 endpoint returns a pointer to embed the legacy admin page in an iframe for
