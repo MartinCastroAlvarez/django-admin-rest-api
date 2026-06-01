@@ -330,6 +330,35 @@ Django's URL resolver hits the ratelimited dispatcher first.)
 Whichever you pick, deploy it on day one — there is no reason to wait
 for the first brute-force attempt.
 
+### Internationalization (i18n)
+
+The package emits its UI / error-envelope strings ("Not found.", "You do
+not have permission.", "Invalid credentials…", etc.) through
+`gettext_lazy`, and model / field / choice labels are already
+`str()`-coerced lazy proxies. They resolve to the **request-active
+locale** — so to get localized envelopes and `verbose_name`s, enable
+Django's `LocaleMiddleware` exactly as the HTML admin requires:
+
+```python
+# settings.py
+USE_I18N = True
+MIDDLEWARE = [
+    # ...
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",   # ← activates request locale
+    "django.middleware.common.CommonMiddleware",
+    # ...
+]
+```
+
+`LocaleMiddleware` must sit **after** `SessionMiddleware` and **before**
+`CommonMiddleware` (Django's documented ordering). Without it, requests
+fall back to `LANGUAGE_CODE` and you get English envelopes / labels — the
+same behavior the HTML admin exhibits without the middleware. The package
+ships no `.po` catalogs of its own; the lazy wrapping means a project that
+adds translations for these source strings (or relies on Django's own
+translated label strings) gets them for free.
+
 ---
 
 ## 🧪 Local development

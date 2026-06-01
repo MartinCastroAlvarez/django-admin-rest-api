@@ -48,6 +48,7 @@ from django.db.models import Model
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 from django_admin_rest_api.api.inlines_write import InlinePermissionDenied
 from django_admin_rest_api.api.inlines_write import InlineValidationError
@@ -60,21 +61,28 @@ from django_admin_rest_api.api.serializers import safe_get_field
 # Canonical 404 body. Deliberately omits the requested app/model/pk —
 # leaking those would give an attacker an oracle for what *would* have
 # existed had they been authorized. See ``SECURITY.md`` §3 rule 12.
+# Envelope strings are ``gettext_lazy`` (#73): a non-English admin gets
+# localized envelopes, resolved at serialization time against the
+# request-active locale (Django's ``LocaleMiddleware``). Machine-readable
+# ``code`` values stay plain ASCII and are never translated.
 _NOT_FOUND_BODY: dict[str, Any] = {
-    "error": {"code": "not_found", "message": "Not found."},
+    "error": {"code": "not_found", "message": _("Not found.")},
 }
 
 
 # --------------------------------------------------------------------------- #
 # Response factories                                                          #
 # --------------------------------------------------------------------------- #
-def bad_request(message: str = "Malformed request.") -> HttpResponse:
+def bad_request(message: Any = None) -> HttpResponse:
     """Return the package's canonical 400 ``bad_request`` envelope.
 
     The ``message`` is safe to surface to the client; never include
     request-derived strings here unless they are ``repr()``-quoted
-    (``SECURITY.md`` §3 rule 12).
+    (``SECURITY.md`` §3 rule 12). ``message`` may be a plain ``str`` or a
+    ``gettext_lazy`` proxy; it serializes to the request-active locale.
     """
+    if message is None:
+        message = _("Malformed request.")
     body = {"error": {"code": "bad_request", "message": message}}
     response = JsonResponse(body, status=400)
     response["Cache-Control"] = "no-store"
@@ -93,7 +101,7 @@ def validation_failed(errors: dict[str, Any]) -> HttpResponse:
     body = {
         "error": {
             "code": "validation_failed",
-            "message": "One or more fields are invalid.",
+            "message": _("One or more fields are invalid."),
             "fields": errors,
         }
     }
@@ -115,13 +123,13 @@ def not_found_response() -> HttpResponse:
     return response
 
 
-_CONFLICT_MESSAGE = (
+_CONFLICT_MESSAGE = _(
     "This change conflicts with an existing record — a database uniqueness "
     "or integrity constraint was violated."
 )
 
 
-def conflict_error() -> dict[str, str]:
+def conflict_error() -> dict[str, Any]:
     """Canonical DB ``IntegrityError`` envelope body (#404).
 
     Generic by design: the database driver's message can disclose

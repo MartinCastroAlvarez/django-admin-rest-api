@@ -61,6 +61,7 @@ from django.contrib.auth import logout as auth_logout
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.permissions import log_security_event
@@ -73,7 +74,9 @@ from django_admin_rest_api.api.views.base import BaseAPIView
 # an attacker learns only "those credentials did not grant access",
 # never *which* of the four reasons applied.
 _INVALID_CODE = "invalid_credentials"
-_INVALID_MESSAGE = "Invalid credentials or insufficient permissions."
+# gettext_lazy (#73): localized at serialization time; the single generic
+# message stays a non-oracle regardless of locale.
+_INVALID_MESSAGE = _("Invalid credentials or insufficient permissions.")
 
 
 def _no_store(response: HttpResponse) -> HttpResponse:
@@ -82,7 +85,7 @@ def _no_store(response: HttpResponse) -> HttpResponse:
     return response
 
 
-def _error(code: str, message: str, status: int) -> HttpResponse:
+def _error(code: str, message: Any, status: int) -> HttpResponse:
     """Build the standard ``{"error": {...}}`` envelope with no-store."""
     return _no_store(JsonResponse({"error": {"code": code, "message": message}}, status=status))
 
@@ -139,9 +142,9 @@ class LoginView(BaseAPIView):
         try:
             payload = json.loads(request.body or b"{}")
         except (ValueError, TypeError):
-            return _error("bad_request", "Malformed JSON body.", 400)
+            return _error("bad_request", _("Malformed JSON body."), 400)
         if not isinstance(payload, dict):
-            return _error("bad_request", "Malformed JSON body.", 400)
+            return _error("bad_request", _("Malformed JSON body."), 400)
 
         username = payload.get("username")
         password = payload.get("password")

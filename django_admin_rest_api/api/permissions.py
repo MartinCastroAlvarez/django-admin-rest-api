@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from typing import Any
 from typing import Final
 
 from django.conf import settings
@@ -32,6 +33,7 @@ from django.contrib.admin.sites import AdminSite
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 from django_admin_rest_api.api.registry import get_admin_site
 
@@ -122,14 +124,19 @@ def is_admin_user(request: HttpRequest, admin_site: AdminSite | None = None) -> 
     return bool(site.has_permission(request))
 
 
-_FORBIDDEN_BODY: Final[dict[str, dict[str, str]]] = {
-    "error": {"code": "forbidden", "message": "You do not have permission."}
+# Error-envelope strings are wrapped in ``gettext_lazy`` (#73) so a non-English
+# admin gets localized envelopes. ``JsonResponse``'s ``DjangoJSONEncoder``
+# resolves the lazy proxy at serialization time against the request-active
+# locale (activated by Django's ``LocaleMiddleware`` — see README/SECURITY).
+# The machine-readable ``code`` stays a plain ASCII string (never translated).
+_FORBIDDEN_BODY: Final[dict[str, dict[str, Any]]] = {
+    "error": {"code": "forbidden", "message": _("You do not have permission.")}
 }
 
-_SESSION_EXPIRED_BODY: Final[dict[str, dict[str, str]]] = {
+_SESSION_EXPIRED_BODY: Final[dict[str, dict[str, Any]]] = {
     "error": {
         "code": "session_expired",
-        "message": "Your session has expired. Please sign in again.",
+        "message": _("Your session has expired. Please sign in again."),
     }
 }
 
