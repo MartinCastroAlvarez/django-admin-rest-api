@@ -318,15 +318,28 @@ def test_bulk_malformed_json_is_bad_request(superuser_client: Client) -> None:
 
 @pytest.mark.django_db
 def test_bulk_exceeds_cap_is_bad_request(superuser_client: Client) -> None:
-    """`updates` beyond the bulk cap → 400 (bulk.py cap guard)."""
-    from django_admin_rest_api.api.views.bulk import _BULK_MAX_UPDATES
+    """`updates` beyond the bulk cap → 400 (bulk.py cap guard).
 
-    payload = {"updates": [{"pk": 1, "fields": {"name": "x"}}] * (_BULK_MAX_UPDATES + 1)}
+    The cap is single-sourced from ``conf.MAX_BULK_UPDATES`` (#69), which
+    defaults to ``MAX_PAGE_SIZE`` when unset.
+    """
+    from django_admin_rest_api import conf
+
+    cap = conf.MAX_BULK_UPDATES
+    payload = {"updates": [{"pk": 1, "fields": {"name": "x"}}] * (cap + 1)}
     response = superuser_client.patch(
         BULK_URL, data=json.dumps(payload), content_type="application/json"
     )
     assert response.status_code == 400
     assert "cap" in response.json()["error"]["message"].lower()
+
+
+@pytest.mark.django_db
+def test_bulk_cap_defaults_to_max_page_size() -> None:
+    """``MAX_BULK_UPDATES`` tracks ``MAX_PAGE_SIZE`` when not set explicitly (#69)."""
+    from django_admin_rest_api import conf
+
+    assert conf.MAX_BULK_UPDATES == conf.MAX_PAGE_SIZE
 
 
 @pytest.mark.django_db

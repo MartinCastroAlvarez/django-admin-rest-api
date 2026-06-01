@@ -60,7 +60,11 @@ build:
   parameter on list endpoints, regardless of the model's
   `list_per_page`. Override only if your dataset genuinely supports
   it and you have monitoring for slow queries.
-- Bulk endpoints (`bulk-update`, `actions`, `delete-preview`) apply
+- `MAX_BULK_UPDATES` caps the number of rows in a single
+  `PATCH .../bulk/` batch. It is single-sourced: when unset it tracks
+  `MAX_PAGE_SIZE` (so lowering `MAX_PAGE_SIZE` for DoS reasons tightens
+  the bulk cap too), and `0` disables it.
+- Bulk endpoints (`bulk`, `actions`, `delete-preview`) apply
   the same per-object permission gate over the selection — there is
   no "skip permissions for batches" code path.
 

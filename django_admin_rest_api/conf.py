@@ -41,6 +41,14 @@ DEFAULTS: dict[str, Any] = {
     # project (raise it if you have legitimate workflows running
     # actions across larger selections). 0 disables the cap entirely.
     "MAX_ACTION_PKS": 5000,
+    # Cap on the number of rows a single bulk-update (``PATCH .../bulk/``)
+    # batch may carry. Mirrors ``MAX_ACTION_PKS``'s posture: a DoS guard
+    # against a crafted batch that materialises thousands of forms in one
+    # request. Defaults to ``MAX_PAGE_SIZE`` (so a "save the whole page"
+    # workflow fits in one batch) — see ``_load``, which fills this in when
+    # the consumer hasn't set it explicitly. Tuneable per project; 0
+    # disables the cap entirely.
+    "MAX_BULK_UPDATES": None,
     # When True, list responses include per-query timing in a debug
     # block. Off by default — only enable in development.
     "ENABLE_PROFILING": False,
@@ -55,6 +63,7 @@ class _PackageSettings:
     DEFAULT_PAGE_SIZE: int = DEFAULTS["DEFAULT_PAGE_SIZE"]
     MAX_PAGE_SIZE: int = DEFAULTS["MAX_PAGE_SIZE"]
     MAX_ACTION_PKS: int = DEFAULTS["MAX_ACTION_PKS"]
+    MAX_BULK_UPDATES: int = DEFAULTS["MAX_PAGE_SIZE"]
     ENABLE_PROFILING: bool = DEFAULTS["ENABLE_PROFILING"]
 
 
@@ -70,6 +79,12 @@ def _load() -> _PackageSettings:
     unknown = set(merged) - set(DEFAULTS)
     if unknown:
         raise ValueError("Unknown DJANGO_ADMIN_REST_API keys: " + ", ".join(sorted(unknown)))
+    # Single-source the bulk cap (#69): when the consumer hasn't set
+    # ``MAX_BULK_UPDATES`` explicitly it tracks ``MAX_PAGE_SIZE`` (so a
+    # "save the whole page" workflow always fits in one batch, and lowering
+    # MAX_PAGE_SIZE for DoS reasons tightens the bulk cap too).
+    if merged["MAX_BULK_UPDATES"] is None:
+        merged["MAX_BULK_UPDATES"] = merged["MAX_PAGE_SIZE"]
     return _PackageSettings(**merged)
 
 

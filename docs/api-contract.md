@@ -343,7 +343,7 @@ If the action returns an `HttpResponse` (e.g. an intermediate confirmation page)
 
 ### 5.5 `PATCH /api/v1/<app>/<model>/bulk/`
 
-Apply the same field-value patch to a selection. Request: `{"pks": [...], "fields": {...}}`. Returns per-row `{ok, error}` envelopes. Capped at the same DoS guard as actions.
+Apply the same field-value patch to a selection. Request: `{"pks": [...], "fields": {...}}`. Returns per-row `{ok, error}` envelopes. The batch size is capped by the `MAX_BULK_UPDATES` setting (defaults to `MAX_PAGE_SIZE` when unset; `0` disables the cap) — a DoS guard against a single request materialising thousands of forms.
 
 ### 5.6 `POST /api/v1/<app>/<model>/<pk>/password/`
 

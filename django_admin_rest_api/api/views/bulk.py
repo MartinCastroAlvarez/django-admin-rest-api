@@ -39,6 +39,7 @@ from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
 
+from django_admin_rest_api import conf
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
@@ -55,12 +56,6 @@ from django_admin_rest_api.api.writes import parse_json_body
 from django_admin_rest_api.api.writes import readonly_or_excluded_names
 from django_admin_rest_api.api.writes import reject_forbidden_keys
 from django_admin_rest_api.api.writes import writable_field_names
-
-# Cap batch size: a single keystroke from a client worker should not be
-# able to materialise 10k forms. 200 matches the package-wide
-# ``MAX_PAGE_SIZE`` default so a "save the whole page" workflow fits
-# in one batch.
-_BULK_MAX_UPDATES = 200
 
 
 class BulkUpdateView(BaseAPIView):
@@ -94,8 +89,14 @@ class BulkUpdateView(BaseAPIView):
         updates = body.get("updates")
         if not isinstance(updates, list) or not updates:
             return bad_request("`updates` must be a non-empty list.")
-        if len(updates) > _BULK_MAX_UPDATES:
-            return bad_request(f"`updates` exceeds the bulk cap of {_BULK_MAX_UPDATES}.")
+        # Cap batch size: a single keystroke from a client worker should not
+        # be able to materialise thousands of forms. The cap is single-sourced
+        # from ``conf.MAX_BULK_UPDATES`` (#69) which defaults to
+        # ``MAX_PAGE_SIZE`` so a "save the whole page" workflow fits in one
+        # batch; a project may tune it independently (0 disables the cap).
+        bulk_cap = conf.MAX_BULK_UPDATES
+        if bulk_cap and len(updates) > bulk_cap:
+            return bad_request(f"`updates` exceeds the bulk cap of {bulk_cap}.")
 
         results: list[dict[str, Any]] = []
         accepted = 0
