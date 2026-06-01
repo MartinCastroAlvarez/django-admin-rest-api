@@ -198,6 +198,85 @@ Single-object descriptor for the change page:
 - `object_actions` shares the shape and source of `actions` on the list response — the consumer renders detail-target actions here. Clicks POST to the same runner URL as the changelist actions.
 - `fields[*].type` is one of the documented kinds: `string`, `integer`, `decimal`, `float`, `boolean`, `date`, `datetime`, `time`, `duration`, `uuid`, `json`, `array`, `range`, `foreign_key`, `many_to_many`, `file`, `email`, `url`, `image`, `unsupported`.
 
+### 4.1 `GET /api/v1/<app>/<model>/<pk>/form-spec/` and `…/add/form-spec/` — ModelAdmin form spec
+
+The detail payload (§4) is built from the **model** layer. The form-spec
+endpoint is built from the **ModelAdmin** layer: it resolves the *live*
+form the legacy `/admin/` change (or add) page would render — honouring
+request-aware `get_form(request, obj, change)`, `get_fieldsets(request,
+obj)`, `get_readonly_fields(request, obj)`, `formfield_overrides`, custom
+`Form` classes, and the admin relation widgets — and maps each field's
+resolved widget to a **closed `widget.kind` enum**. The SPA change/add page
+and the MCP `admin.form_spec` tool consume the same resolver, so they can
+never drift.
+
+- `…/<pk>/form-spec/` → change form for an existing object (`get_form(…,
+  change=True)`); gated on per-object `has_view_permission`.
+- `…/add/form-spec/` → add form for a new object (`get_form(…,
+  change=False, obj=None)`); gated on `has_add_permission`.
+- The request's querystring is forwarded into the resolved `request`, so a
+  `get_form` that branches on `request.GET` (e.g. `?variant=…`) renders the
+  matching form (the `variant` field reflects the resolved `Form` class).
+
+Normal response (`renderer: "form-spec"`):
+
+```json
+{
+  "renderer": "form-spec",
+  "fieldsets": [
+    {"title": "Identity", "fields": ["name", "slug"], "field_rows": [["name", "slug"]],
+     "classes": ["wide"], "description": null}
+  ],
+  "fields": {
+    "name": {
+      "label": "Name", "help_text": "", "required": true, "readonly": false,
+      "type": "string",
+      "widget": {"kind": "text", "attrs": {"maxlength": 150}},
+      "initial": "editors", "errors": []
+    },
+    "bio": {
+      "label": "Bio", "required": false, "readonly": false, "type": "text",
+      "widget": {"kind": "custom", "attrs": {"rows": 10},
+                 "widget_class": "mypkg.widgets.MarkdownEditor",
+                 "template_name": "mypkg/markdown.html"},
+      "initial": "", "help_text": "", "errors": []
+    }
+  },
+  "variant": "myapp.forms.GroupForm"
+}
+```
+
+- `widget.kind` is a **closed enum**: `text`, `textarea`, `number`,
+  `email`, `url`, `password`, `hidden`, `checkbox`, `checkbox-multiple`,
+  `select`, `select-multiple`, `radio`, `date`, `datetime`, `time`,
+  `split-datetime`, `select-date`, `file`, `autocomplete`,
+  `autocomplete-multiple`, `raw-id`, `shuttle`, `custom`. A widget with no
+  recognised Django ancestor maps to `custom`.
+- `widget.attrs` carries the resolved HTML attrs (so `formfield_overrides`
+  is visible — e.g. a forced `Textarea`'s `{"rows": 10}`); always
+  JSON-scalar values.
+- `widget.widget_class` (+ `widget.template_name` when present) is attached
+  whenever the widget class lives outside `django.*` — i.e. it came from
+  the consumer, `formfield_overrides`, or a third-party library — so a
+  consumer-registered SPA renderer (django-admin-react #625 protocol) can
+  dispatch on it. `kind` still carries a stock fallback so a client with no
+  plugin renders something usable.
+- `initial` reuses the §4 value serialisation verbatim (FK → `{id, label}`,
+  M2M → `[…]`, a `PasswordInput`-masked value → `null`).
+- `errors` is `[]` on a GET; submitting through `POST`/`PATCH` (§5.1/§5.2)
+  re-runs the **same** resolved `get_form` through `is_valid()` and returns
+  per-field errors under `fields[<name>]` — request-aware validation is
+  identical across SPA, MCP, and the legacy admin.
+
+Escape hatch — when the ModelAdmin overrides `change_form_template` (or
+`add_form_template`), the form can't be faithfully rendered from JSON, so
+the endpoint returns a pointer to embed the legacy admin page in an iframe
+for that one view instead of silently dropping the customisation:
+
+```json
+{"renderer": "legacy-iframe", "legacy_url": "/admin/auth/group/1/change/?…"}
+```
+
 ---
 
 ## §5. Writes

@@ -30,6 +30,7 @@ from django_admin_rest_api.api.views.create_form import AddFormView
 from django_admin_rest_api.api.views.delete_preview import DeletePreviewView
 from django_admin_rest_api.api.views.destroy import DestroyView
 from django_admin_rest_api.api.views.detail import DetailView
+from django_admin_rest_api.api.views.form_spec import FormSpecView
 from django_admin_rest_api.api.views.history import HistoryView
 from django_admin_rest_api.api.views.list import ListView
 from django_admin_rest_api.api.views.password import SetPasswordView
@@ -118,6 +119,16 @@ urlpatterns: list = [
         BulkUpdateView.as_view(),
         name="bulk_update",
     ),
+    # Add-view form spec (#59) — the ModelAdmin-resolved form for a NEW
+    # object (request-aware get_form / fieldsets / readonly + closed
+    # widget.kind enum). Two literal segments (``add/form-spec``) — must
+    # precede both the ``add/`` add-form route and the ``<pk>`` instance
+    # route so neither swallows it.
+    path(
+        "<str:app_label>/<str:model_name>/add/form-spec/",
+        FormSpecView.as_view(),
+        name="form_spec_add",
+    ),
     # Add-form schema — the create page's field descriptors for a NEW
     # object. Literal ``add`` must precede the ``<pk>`` instance route
     # below so it isn't swallowed as a pk.
@@ -138,6 +149,14 @@ urlpatterns: list = [
         "<str:app_label>/<str:model_name>/<str:pk>/panel/<str:panel_name>/",
         PanelView.as_view(),
         name="panel",
+    ),
+    # Change-view form spec (#59) — the ModelAdmin-resolved form for an
+    # EXISTING object. Literal ``form-spec`` segment must precede the
+    # ``<pk>`` instance route below so it isn't swallowed.
+    path(
+        "<str:app_label>/<str:model_name>/<str:pk>/form-spec/",
+        FormSpecView.as_view(),
+        name="form_spec",
     ),
     # History sub-resource (#155) — LogEntry timeline for one object.
     # Must precede the instance pattern so ``/history/`` isn't
