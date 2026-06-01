@@ -68,6 +68,24 @@ build:
   the same per-object permission gate over the selection — there is
   no "skip permissions for batches" code path.
 
+## Form-spec introspection probe (GET-idempotency requirement)
+
+The form-spec endpoint
+(`GET /api/v1/<app>/<model>/[<pk>|add]/form-spec/`) detects whether a
+`ModelAdmin` renders a custom change/add page so the SPA can fall back to
+an iframe. When — and only when — the admin **overrides** `change_view`
+or `add_view`, the resolver *invokes* that override with the live GET
+request to inspect the template it returns
+(`api/form_spec._renders_custom_template`).
+
+Because the override runs on a GET, it **must stay GET-idempotent**: a GET
+must not mutate state. This is already Django's own contract for those
+views (a GET renders the form; writes happen on POST), so a well-behaved
+override is unaffected. An override that performs a side effect on GET (an
+anti-pattern) would have that side effect triggered by a form-spec read,
+and any exception it raises is swallowed to the JSON-spec fallback. Keep
+`change_view` / `add_view` overrides read-only on GET.
+
 ## Security logging
 
 The package emits one structured record on the dedicated

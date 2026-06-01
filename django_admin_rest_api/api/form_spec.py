@@ -220,7 +220,16 @@ def _renders_custom_template(
     Only probes when the view method is genuinely overridden — a stock
     ``ModelAdmin`` never pays this cost. The view is invoked with the real
     (GET) form-spec request, so a request-aware override resolves the same
-    branch the SPA / legacy admin would. A lazy ``TemplateResponse`` carrying
+    branch the SPA / legacy admin would.
+
+    SECURITY NOTE (#70): because the override is *invoked* here on a GET, an
+    overridden ``change_view`` / ``add_view`` MUST stay GET-idempotent — i.e.
+    a GET must not mutate state. This is already Django's own contract for
+    those views (a GET renders the form; mutation happens on POST), so a
+    well-behaved override is unaffected. An override that writes on GET (an
+    anti-pattern) would run that side effect on a form-spec read. See
+    ``SECURITY.md`` ("Form-spec introspection probe"). A lazy
+    ``TemplateResponse`` carrying
     ``admin/change_form.html`` is the stock form (→ render the JSON spec);
     anything else — a different template, a ``render()`` ``HttpResponse``, a
     redirect — means the SPA can't reproduce it, so fall back to the iframe.

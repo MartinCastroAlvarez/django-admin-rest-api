@@ -345,6 +345,39 @@ def _password_redacted_fields(
     return redacted
 
 
+def _apply_inline_related(queryset: Any, model: type[Model], visible_fields: list[str]) -> Any:
+    """Apply ``select_related`` / ``prefetch_related`` for inline columns (#71).
+
+    Mirrors the top-level list view's N+1 guard but scoped to the inline:
+
+    - forward FK / one-to-one columns → ``select_related(name)`` (one JOIN
+      instead of one query per row);
+    - many-to-many columns → ``prefetch_related(name)`` (one extra query for
+      the whole page instead of one per row).
+
+    Method / callable columns and plain scalar fields are skipped. Never
+    overrides a ``select_related`` the inline's ``get_queryset`` already
+    configured. Best-effort: an unresolvable field name is ignored so a
+    display-method column can't break the fetch.
+    """
+    select: list[str] = []
+    prefetch: list[str] = []
+    for name in visible_fields:
+        try:
+            field = model._meta.get_field(name)
+        except FieldDoesNotExist:
+            continue
+        if isinstance(field, ManyToManyField):
+            prefetch.append(name)
+        elif getattr(field, "many_to_one", False) or getattr(field, "one_to_one", False):
+            select.append(name)
+    if select and not getattr(queryset.query, "select_related", False):
+        queryset = queryset.select_related(*select)
+    if prefetch:
+        queryset = queryset.prefetch_related(*prefetch)
+    return queryset
+
+
 def _rows_for_inline(
     inline: InlineModelAdmin,
     parent: Model,
@@ -359,6 +392,12 @@ def _rows_for_inline(
     # parent detail. Kept broad on purpose; logged.
     try:
         queryset = inline.get_queryset(request).filter(**{fk_name: parent.pk})
+        # N+1 guard (#71): forward FK/O2O columns are select_related and M2M
+        # columns prefetch_related before iterating, mirroring how the
+        # top-level list view applies list_select_related. Without this an
+        # inline with an FK column and N child rows issues N extra queries
+        # (and one query per row per M2M column).
+        queryset = _apply_inline_related(queryset, inline.model, visible_fields)
     except Exception:  # pragma: no cover
         logger.warning(
             "get_queryset failed for inline %r; surfacing no rows",
