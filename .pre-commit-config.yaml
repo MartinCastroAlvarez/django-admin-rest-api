@@ -25,17 +25,7 @@ repos:
       - id: ruff
         args: ["--fix", "--exit-non-zero-on-fix"]
         files: ^(django_admin_rest_api|tests)/
-
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.8.0
-    hooks:
-      - id: black
-        files: ^(django_admin_rest_api|tests)/
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
+      - id: ruff-format
         files: ^(django_admin_rest_api|tests)/
 
   # -------------------------------------------------------------------

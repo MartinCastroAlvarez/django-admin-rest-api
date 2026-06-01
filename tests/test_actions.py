@@ -310,9 +310,7 @@ def test_delete_selected_confirmed_actually_deletes(superuser_client: Client) ->
 def test_action_respects_get_queryset(superuser_client: Client) -> None:
     """Action cannot reach a row the admin's get_queryset excludes."""
     User = get_user_model()
-    visible = User.objects.create_user(
-        username="visible", password="x", is_active=True
-    )  # noqa: S106
+    visible = User.objects.create_user(username="visible", password="x", is_active=True)  # noqa: S106
     hidden = User.objects.create_user(username="hidden", password="x", is_active=True)  # noqa: S106
 
     # Pin get_queryset to exclude ``hidden`` by pk.
@@ -523,9 +521,7 @@ def _detail_action_obj_id_str(model_admin, request, obj_id: str):  # noqa: ANN00
 _detail_action_obj_id_str.short_description = "Detail by obj_id+str"
 
 
-def _detail_action_object_id_only_name(
-    model_admin, request, object_id
-):  # noqa: ANN001, ANN201, ARG001
+def _detail_action_object_id_only_name(model_admin, request, object_id):  # noqa: ANN001, ANN201, ARG001
     """Detail shape signalled only by parameter name (no annotation)."""
     return
 
