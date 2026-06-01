@@ -1,9 +1,9 @@
 """Access to Django's admin audit log (``LogEntry``).
 
 This module is deliberately **outside** ``django_admin_rest_api/api/``.
-The ``api/`` package obeys the hard rule (``SECURITY.md`` §3 rule 10 /
-``ACCEPTANCE.md`` §3.1 B-2): every **consumer-model** queryset starts
-from ``ModelAdmin.get_queryset(request)``, never ``Model.objects.*``.
+The ``api/`` package obeys the hard rule (``SECURITY.md`` §3 rule 10):
+every **consumer-model** queryset starts from
+``ModelAdmin.get_queryset(request)``, never ``Model.objects.*``.
 
 ``django.contrib.admin.models.LogEntry`` is **not** a consumer model —
 it is Django's own framework audit table, and Django's own

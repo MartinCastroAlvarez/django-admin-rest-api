@@ -17,6 +17,5 @@ Each view must:
 1. Authenticate via the package's default permission helper
    (staff + `AdminSite.has_permission`).
 2. Resolve the target `ModelAdmin` via `admin.site._registry`.
-3. Delegate to the appropriate `ModelAdmin.*` method (see
-   `ARCHITECTURE.md` §4.1).
+3. Delegate to the appropriate `ModelAdmin.*` method.
 4. Serialize through `api/serializers.py` only.

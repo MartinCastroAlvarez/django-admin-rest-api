@@ -1,6 +1,6 @@
 """``ModelAdmin.inlines`` surfacing on the detail endpoint (Issue #54).
 
-Wire contract: ``docs/api-contract.md`` §4.2.
+Wire contract: ``docs/api-contract.md`` §4.
 
 For each ``InlineModelAdmin`` declared on the parent ``ModelAdmin``,
 the detail response includes a metadata block plus the existing
@@ -211,7 +211,7 @@ def _resolve_fk_name(inline: InlineModelAdmin, parent: Model) -> str | None:
     child's FK fields for one whose related model is the parent's
     class (or a superclass).
     """
-    declared = getattr(inline, "fk_name", None)
+    declared: str | None = getattr(inline, "fk_name", None)
     if declared:
         return declared
     parent_class = type(parent)

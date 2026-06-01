@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §5 and §6.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 6:  Writes go through ``ModelAdmin.get_form()`` — never
            ``setattr(obj, ...)`` directly (B-3).
@@ -216,7 +216,7 @@ def writable_field_names(
 
     Computed as ``get_fields`` minus ``get_exclude`` minus
     ``get_readonly_fields`` minus the sensitive-name denylist
-    (``ACCEPTANCE.md`` §4.7 S-31) minus ``ManyToManyField``
+    (``docs/api-contract.md`` §5) minus ``ManyToManyField``
     (unsupported in v1 per ``docs/api-contract.md`` §4).
 
     Defense-in-depth: even if a ``ModelAdmin`` author forgets to
@@ -322,7 +322,7 @@ def coerce_fk_values(
 
     - FKs *out* as ``{"id": pk, "label": str}`` (§4) but accepts a
       bare pk *in* (§5.1).
-    - M2M *out* as ``[{"id": pk, "label": str}, ...]`` (§4.2) and
+    - M2M *out* as ``[{"id": pk, "label": str}, ...]`` (§4) and
       accepts a list of bare pks *in* — or a list of envelopes, which
       we unwrap here.
 

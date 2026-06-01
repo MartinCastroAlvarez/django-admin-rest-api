@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §5.2.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
 - Rule 5:  ``has_change_permission(request, obj)`` per-object gate.
@@ -209,7 +209,7 @@ class UpdateView(View):
             # Malformed ``inlines`` payload shape (not a 500). Return a
             # fixed, generic message — never echo the exception text into
             # the response (CodeQL ``py/stack-trace-exposure``). The
-            # precise shape rules are in api-contract §5.2.1.
+            # precise shape rules are in api-contract §5.2.
             return bad_request("Malformed 'inlines' payload.")
 
         response = JsonResponse(

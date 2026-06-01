@@ -48,6 +48,6 @@ class RegistryView(View):
             return forbidden_response(request)
         response = JsonResponse(build_registry_payload(admin_site, request), status=200)
         # Never let an intermediate proxy or browser cache cross-user
-        # data (extends ACCEPTANCE.md §4.6 S-30 to 200 responses).
+        # data (``docs/api-contract.md`` §1.2).
         response["Cache-Control"] = "no-store"
         return response

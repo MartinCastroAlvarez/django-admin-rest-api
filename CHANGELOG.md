@@ -5,6 +5,33 @@ All notable changes to **django-admin-rest-api** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Consolidated the Python lint stack on Ruff (check + format) + mypy +
+  bandit.** Removed pylint, flake8, Black, and standalone isort — their
+  config blocks, dev-dependencies, pre-commit hooks, and CI steps — which
+  were declared and failing but never gated. Ruff's formatter and `I`
+  import rules now own formatting and import sorting (single source of
+  truth) (#52, #53).
+- **Tightened mypy** by enabling `disallow_untyped_defs` and
+  `warn_return_any`. (Full `strict` was deferred: it cascades into ~80
+  `disallow_any_generics` findings on the dynamic ModelAdmin/QuerySet
+  boundary, which is separate bulk-typing work.) (#56)
+
+### Fixed
+- **Repointed dangling documentation references in shipped source.** Cites
+  to non-existent `ACCEPTANCE.md`, `ARCHITECTURE.md`,
+  `docs/architect-verdict-2026-05-26.md`, and the missing
+  `docs/api-contract.md` §4.2 / §5.2.1 subsections now point at surviving
+  contract sections or were removed. Added a pytest guard that fails the
+  build when source cites a missing `*.md` file or a missing
+  `docs/api-contract.md` `§N` section (#54).
+
+### Added
+- **Docstrings on the remaining undocumented public API**, bringing
+  public-function and class docstring coverage to 100% (#58).
+
 ## [1.3.0] — 2026-05-31
 
 ### Added

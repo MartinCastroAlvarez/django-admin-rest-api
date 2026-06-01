@@ -47,12 +47,6 @@ mypy = "^1.10"
 django-stubs = { version = "^5.0", extras = ["compatible-mypy"] }
 bandit = "^1.7"
 pip-audit = "^2.7"
-black = "^26.3.1"
-isort = "^5.13"
-flake8 = "^7.1"
-Flake8-pyproject = "^1.2"
-pylint = "^3.2"
-pylint-django = "^2.5"
 
 [build-system]
 requires = ["poetry-core>=1.6.0"]
@@ -115,7 +109,12 @@ filterwarnings = [
 # --------------------------------------------------------------------------- #
 [tool.mypy]
 python_version = "3.10"
-strict = false
+# Full ``strict = true`` was attempted but cascades into ~80 ``disallow_any_generics``
+# errors on the dynamic ModelAdmin/QuerySet boundary (e.g. ``ModelAdmin[Any]``),
+# which is the bulk-typing work tracked separately. We enable the high-value strict
+# flags the annotation-complete package already satisfies.
+disallow_untyped_defs = true
+warn_return_any = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 ignore_missing_imports = true
@@ -123,72 +122,6 @@ plugins = ["mypy_django_plugin.main"]
 
 [tool.django-stubs]
 django_settings_module = "tests.test_project.settings"
-
-# --------------------------------------------------------------------------- #
-# Black
-# --------------------------------------------------------------------------- #
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-include = "\\.pyi?$"
-extend-exclude = "tests/test_project/migrations|dist"
-
-# --------------------------------------------------------------------------- #
-# isort
-# --------------------------------------------------------------------------- #
-[tool.isort]
-profile = "black"
-line_length = 100
-force_single_line = true
-known_first_party = ["django_admin_rest_api", "tests"]
-skip_glob = ["tests/test_project/migrations/*", "dist/*", "examples/*"]
-
-# --------------------------------------------------------------------------- #
-# flake8
-# --------------------------------------------------------------------------- #
-[tool.flake8]
-max-line-length = 100
-extend-ignore = [
-    "E203",
-    "E501",
-    "W503",
-]
-exclude = [
-    ".git",
-    "__pycache__",
-    "tests/test_project/migrations",
-    "dist",
-    ".venv",
-]
-per-file-ignores = [
-    "tests/*:S101",
-]
-
-# --------------------------------------------------------------------------- #
-# pylint
-# --------------------------------------------------------------------------- #
-[tool.pylint.main]
-load-plugins = ["pylint_django"]
-django-settings-module = "tests.test_project.settings"
-ignore-paths = [
-    "tests/test_project/migrations/.*",
-    "dist/.*",
-]
-
-[tool.pylint."messages control"]
-disable = [
-    "missing-module-docstring",
-    "missing-class-docstring",
-    "missing-function-docstring",
-    "too-few-public-methods",
-    "import-outside-toplevel",
-    "line-too-long",
-    "fixme",
-    "duplicate-code",
-]
-
-[tool.pylint.format]
-max-line-length = 100
 
 # --------------------------------------------------------------------------- #
 # Coverage

@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §4.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 1:  Staff + ``AdminSite.has_permission`` gate.
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
@@ -10,9 +10,9 @@ Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
 - Rule 6:  Fields come from ``ModelAdmin.get_form(request, obj)`` /
            ``get_fields`` / ``get_readonly_fields`` / ``get_exclude``.
            Sensitive-name denylist applied on top
-           (``ACCEPTANCE.md`` §4.7 S-31).
+           (``docs/api-contract.md`` §4).
 - Rule 10: Queryset starts at ``ModelAdmin.get_queryset(request)`` —
-           never ``Model.objects.all()`` (B-2).
+           never ``Model.objects.all()``.
 """
 
 from __future__ import annotations
@@ -107,8 +107,8 @@ class DetailView(View):
         payload = _build_payload(model, model_admin, obj, request, admin_site)
         response = JsonResponse(payload, status=200)
         # No-store: per-user, permission-gated payload must never be
-        # cached by intermediate proxies or the browser. Extends
-        # ACCEPTANCE.md §4.6 S-30 (defined for 4xx) to 200 responses.
+        # cached by intermediate proxies or the browser
+        # (``docs/api-contract.md`` §1.2).
         response["Cache-Control"] = "no-store"
         return response
 

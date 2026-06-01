@@ -65,11 +65,8 @@ jobs:
       - name: ruff (lint)
         run: poetry run ruff check .
 
-      - name: black (format)
-        run: poetry run black --check .
-
-      - name: isort
-        run: poetry run isort --check-only .
+      - name: ruff (format)
+        run: poetry run ruff format --check .
 
       - name: mypy
         run: poetry run mypy django_admin_rest_api

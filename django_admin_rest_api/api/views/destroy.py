@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §5.3.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
 - Rule 5:  ``has_delete_permission(request, obj)`` per-object gate.

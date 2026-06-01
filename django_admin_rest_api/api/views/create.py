@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §5.1.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 1:  Staff + ``AdminSite.has_permission`` gate.
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
@@ -65,8 +65,7 @@ class CreateView(View):
 
         Gates: ``is_admin_user`` → ``resolve_model`` →
         ``has_add_permission(request)``. CSRF enforcement is Django's
-        ``CsrfViewMiddleware`` — no ``@csrf_exempt`` (rule 4 /
-        ACCEPTANCE §4.6 S-26).
+        ``CsrfViewMiddleware`` — no ``@csrf_exempt`` (rule 4).
 
         Payload validation runs **before** the form is built:
 
@@ -204,7 +203,7 @@ def _redirect_for(
     The mount is reconstructed from the request path. The URL pattern
     is fixed inside this package, so everything in front of
     ``api/v1/`` is the consumer-chosen prefix
-    (``ARCHITECTURE.md`` §4.5). Falls back to ``/`` if the pattern is
+    (``docs/api-contract.md`` §2). Falls back to ``/`` if the pattern is
     not present (should not happen — the URL router routed us here).
     """
     suffix = "api/v1/"

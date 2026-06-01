@@ -133,7 +133,7 @@ def _mount_from_request(request: HttpRequest) -> str:
 
     The view's URL pattern is fixed inside this package (``api/v1/registry/``),
     so anything in front of that on ``request.path`` is the mount the
-    consumer configured (`ARCHITECTURE.md` §4.5).
+    consumer configured (``docs/api-contract.md`` §2).
     """
     suffix = "api/v1/registry/"
     path = request.path
@@ -277,7 +277,7 @@ def resolve_model(
 
     Returns ``None`` if the model is not registered or the request is not
     permitted to view it. The caller must convert that to a 404, per
-    ``ACCEPTANCE.md`` §3.1 B-7 and §4.3 S-11/S-12.
+    ``docs/api-contract.md`` §2.
     """
     if not isinstance(app_label, str) or not isinstance(model_name, str):
         return None

@@ -10,7 +10,7 @@ queryset narrowed to those pks **and** the admin's own
 ``get_queryset(request)`` (so the action cannot touch rows the user
 isn't allowed to see).
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 1:  Staff + ``AdminSite.has_permission`` gate.
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
@@ -140,6 +140,7 @@ class ActionView(View):
         *args: Any,
         **kwargs: Any,
     ) -> HttpResponse:
+        """Run a named admin action against the selected rows (contract §5.4)."""
         admin_site = get_admin_site()
         if not is_admin_user(request, admin_site=admin_site):
             return forbidden_response(request)
