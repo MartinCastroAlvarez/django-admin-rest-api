@@ -15,6 +15,7 @@ Hard rules followed (`SECURITY.md` §3):
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.contrib.admin.options import ModelAdmin
@@ -46,6 +47,8 @@ from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
 from django_admin_rest_api.api.writes import not_found_response
+
+logger = logging.getLogger(__name__)
 
 # Query params the list view manages itself (pagination / sort / search);
 # any *other* key is a list_filter or date_hierarchy lookup, i.e. the list
@@ -367,9 +370,13 @@ def _columns_payload(
     editable = set(getattr(model_admin, "list_editable", ()) or ())
     payload = []
     for name in list_display:
+        # Best-effort: ``label_for_field`` resolves a possibly consumer-defined
+        # callable; fall back to the raw name rather than 500 the list. Kept
+        # broad on purpose; logged.
         try:
             label = label_for_field(name, model_admin.model, model_admin)
         except Exception:  # pragma: no cover — defensive
+            logger.warning("label_for_field failed for column %r; using raw name", name)
             label = name
         entry: dict[str, Any] = {
             "name": name,
@@ -405,9 +412,13 @@ def _row_for(
     """
     fields: dict[str, Any] = {}
     for name in list_display:
+        # Best-effort: a misbehaving ``list_display`` callable must not break
+        # the whole list response; degrade this cell to "" (graceful degrade).
+        # Kept broad on purpose; logged so the failure is observable.
         try:
             _f, _attr, value = lookup_field(name, obj, model_admin)
         except Exception:  # pragma: no cover — defensive
+            logger.warning("lookup_field failed for column %r; using empty cell", name)
             value = ""
         fields[name] = _serialize_list_value(obj, name, value, admin_site, request)
     return {"pk": obj.pk, "label": label_for(obj), "fields": fields}

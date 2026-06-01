@@ -40,6 +40,7 @@ from typing import Any
 from django.contrib.admin import SimpleListFilter
 from django.contrib.admin.options import ModelAdmin
 from django.contrib.admin.sites import AdminSite
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import BooleanField
 from django.db.models import DateField
 from django.db.models import DateTimeField
@@ -87,7 +88,7 @@ def _safe_get_field(model: type[Model], name: str) -> Field | None:
     """
     try:
         field = model._meta.get_field(name)
-    except Exception:
+    except FieldDoesNotExist:
         return None
     return field if isinstance(field, Field) else None
 
@@ -110,7 +111,7 @@ def _resolve_field_path(model: type[Model], path: str) -> Field | None:
     for index, part in enumerate(parts):
         try:
             candidate = current._meta.get_field(part)
-        except Exception:
+        except FieldDoesNotExist:
             return None
         if not isinstance(candidate, Field):
             return None
@@ -187,13 +188,30 @@ def _spec_for_fk(
     base_qs = related._default_manager.all()
     limit = field.get_limit_choices_to()
     if limit:
+        # Best-effort: ``limit_choices_to`` may be an arbitrary Q/dict the
+        # consumer wrote (or a callable returning one); a malformed limit
+        # must degrade to the unfiltered manager, never 500 the list
+        # descriptor. Kept broad on purpose; logged so it stays observable.
         try:
             base_qs = related._default_manager.complex_filter(limit)
         except Exception:
+            logger.warning(
+                "list_filter FK %r: limit_choices_to failed; using unfiltered manager",
+                field_name,
+                exc_info=True,
+            )
             base_qs = related._default_manager.all()
     try:
         count = base_qs.count()
     except Exception:
+        # Best-effort: counting hits the DB and can raise for many reasons
+        # (DB error, exotic manager). Assume "too many to inline" so the
+        # descriptor still renders. Kept broad on purpose; logged.
+        logger.warning(
+            "list_filter FK %r: count() failed; treating as high-cardinality",
+            field_name,
+            exc_info=True,
+        )
         count = _FK_FILTER_MAX_OPTIONS + 1
     if count <= _FK_FILTER_MAX_OPTIONS:
         from django_admin_rest_api.api.serializers import label_for
@@ -225,13 +243,19 @@ def _spec_for_simple_filter(
     filter_cls: type, model_admin: ModelAdmin, request: HttpRequest
 ) -> dict[str, Any] | None:
     """Build the metadata block for a ``SimpleListFilter`` subclass."""
+    # Best-effort guards around consumer-authored SimpleListFilter code
+    # (``__init__`` / ``lookups`` / ``value`` may all raise on a buggy
+    # filter). A single misbehaving filter must drop its own descriptor,
+    # not 500 the whole changelist. Kept broad on purpose; logged.
     try:
         instance = filter_cls(request, request.GET.copy(), model_admin.model, model_admin)
     except Exception:  # pragma: no cover — admin author error
+        logger.warning("SimpleListFilter %r failed to instantiate", filter_cls, exc_info=True)
         return None
     try:
         lookups = list(instance.lookups(request, model_admin) or [])
     except Exception:  # pragma: no cover — admin author error
+        logger.warning("SimpleListFilter %r: lookups() failed", filter_cls, exc_info=True)
         lookups = []
     # The lookup the filter is currently applying — Django's
     # ``SimpleListFilter.value()``. Crucially this includes a *default*
@@ -243,6 +267,7 @@ def _spec_for_simple_filter(
     try:
         selected = instance.value()
     except Exception:  # pragma: no cover — admin author error
+        logger.warning("SimpleListFilter %r: value() failed", filter_cls, exc_info=True)
         selected = None
     # Django 4.2's ``SimpleListFilter.__init__`` stores the raw list from
     # ``QueryDict.pop`` in ``used_parameters`` — so ``.value()`` returns
@@ -372,6 +397,10 @@ def apply_filters(queryset: QuerySet, model_admin: ModelAdmin, request: HttpRequ
             try:
                 narrowed = instance.queryset(request, queryset)
             except Exception:  # pragma: no cover
+                # Best-effort: a consumer filter's ``queryset`` may raise;
+                # leave the queryset unnarrowed rather than 500. Kept broad
+                # on purpose; logged so the failure is observable.
+                logger.warning("list_filter %r: queryset() failed", entry, exc_info=True)
                 narrowed = None
             if narrowed is not None:
                 queryset = narrowed
@@ -411,9 +440,17 @@ def apply_filters(queryset: QuerySet, model_admin: ModelAdmin, request: HttpRequ
                 queryset = queryset.filter(**{field_name: raw_value})
                 continue
         except Exception:
-            # Garbage value that broke the ORM — narrow to zero
-            # rows rather than 500. The client sees an empty result set
-            # and the metadata block tells it the value was bad.
+            # Best-effort: an attacker-supplied raw value can break the ORM
+            # in many ways (ValueError / ValidationError / FieldError / DB
+            # driver errors); narrow to zero rows rather than 500. The client
+            # sees an empty result set and the metadata block tells it the
+            # value was bad. Kept broad on purpose; logged.
+            logger.warning(
+                "list_filter %r: applying value %r failed; returning no rows",
+                field_name,
+                raw_value,
+                exc_info=True,
+            )
             return queryset.none()
 
     return queryset

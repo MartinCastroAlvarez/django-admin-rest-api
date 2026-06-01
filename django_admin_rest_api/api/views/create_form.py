@@ -17,6 +17,7 @@ add, not view), sensitive-name denylist applied (S-31).
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -42,6 +43,8 @@ from django_admin_rest_api.api.views.detail import _descriptor_for
 from django_admin_rest_api.api.views.detail import _fieldsets_payload
 from django_admin_rest_api.api.views.detail import _visible_field_names
 from django_admin_rest_api.api.writes import not_found_response
+
+logger = logging.getLogger(__name__)
 
 
 class AddFormView(View):
@@ -142,9 +145,13 @@ def _changeform_initial(model_admin: Any, request: HttpRequest) -> dict[str, Any
     override must not 500 the form, so a non-dict or a raised exception
     degrades to "no prefill".
     """
+    # Best-effort: a consumer ``get_changeform_initial_data`` override may
+    # raise; degrade to "no prefill" rather than 500 the form. Kept broad on
+    # purpose; logged so the failure is observable.
     try:
         data = model_admin.get_changeform_initial_data(request)
     except Exception:  # pragma: no cover — admin author error
+        logger.warning("get_changeform_initial_data failed; no prefill", exc_info=True)
         return {}
     return data if isinstance(data, dict) else {}
 
@@ -215,9 +222,13 @@ def _prepopulated_payload(
     doesn't render are filtered out. A target left with no usable sources is
     omitted. The client slugifies the target from its sources while typing.
     """
+    # Best-effort: a consumer ``get_prepopulated_fields`` override may raise;
+    # degrade to "no prepopulation" rather than 500 the form. Kept broad on
+    # purpose; logged.
     try:
         raw = model_admin.get_prepopulated_fields(request, None) or {}
     except Exception:  # pragma: no cover — admin author error
+        logger.warning("get_prepopulated_fields failed; none surfaced", exc_info=True)
         return {}
     visible = set(visible_names)
     out: dict[str, list[str]] = {}

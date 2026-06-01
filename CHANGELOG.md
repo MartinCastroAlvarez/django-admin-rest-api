@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new lower-layer `api/actions_meta.py`, so `registry` (and the management
   command) import them at module top level instead of lazily from inside
   functions. No remaining lazy-import workarounds for that cycle (#55).
+- **Narrowed broad `except Exception` handlers; made the rest observable.**
+  Of the 34 broad catches, 5 were narrowed to the specific exhaustive type
+  (`FieldDoesNotExist` around `_meta.get_field`); the remaining 29 are
+  genuine best-effort guards around consumer ModelAdmin callables / storage
+  backends / per-row rendering that must never 500 the whole response — they
+  keep the broad catch but now carry a one-line rationale comment and log via
+  `logger.warning(..., exc_info=True)`. Behaviour-preserving: no change to
+  which errors reach the client (#57).
 - **Consolidated the Python lint stack on Ruff (check + format) + mypy +
   bandit.** Removed pylint, flake8, Black, and standalone isort — their
   config blocks, dev-dependencies, pre-commit hooks, and CI steps — which
