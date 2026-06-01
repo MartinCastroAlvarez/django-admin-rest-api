@@ -23,7 +23,7 @@ gate:
 4. ``ModelAdmin.get_search_results(request, qs, q)`` — the actual
    search; the package never re-implements search semantics.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 1:  Staff + ``AdminSite.has_permission`` gate.
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).

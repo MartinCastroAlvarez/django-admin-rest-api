@@ -1,8 +1,7 @@
 # django_admin_rest_api/api/
 
 JSON API package. See [`/docs/api-contract.md`](../../docs/api-contract.md)
-for the wire format and [`/ARCHITECTURE.md`](../../ARCHITECTURE.md) §4 for
-the design.
+for the wire format and the design.
 
 ## Rules
 
@@ -28,4 +27,5 @@ the design.
 | `serializers.py`  | Conservative field serialization + denylist.                 |
 | `views/`          | One module per endpoint.                                     |
 
-Implementation status is tracked in `../README.md`.
+Implementation status is tracked in the repository
+[`README.md`](../../README.md).

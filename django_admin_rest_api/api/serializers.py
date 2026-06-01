@@ -5,7 +5,7 @@ converts Python / Django values into the JSON payload, after the admin
 form's exclusion rules have been applied. The sensitive-name denylist
 below is defense-in-depth on top of those rules.
 
-Rules (binding; see ``ACCEPTANCE.md`` §3.5 and §4.7):
+Rules (binding; see ``docs/api-contract.md`` §4):
 
 - Pass-through: ``str``, ``int``, ``float``, ``bool``, ``None``.
 - ``Decimal``, ``UUID``, ``date``, ``datetime``, ``time`` → string forms.
@@ -265,8 +265,7 @@ def safe_get_field(model_or_instance: type[Model] | Model, name: str) -> Field |
 
     Centralized so the read/write code paths that need this lookup
     share one implementation; previously each had a private copy,
-    which is one bug fix in three places (see
-    ``docs/architect-verdict-2026-05-26.md`` Condition A).
+    which is one bug fix in three places.
     """
     try:
         field = model_or_instance._meta.get_field(name)

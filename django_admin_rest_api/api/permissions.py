@@ -64,7 +64,7 @@ def is_admin_user(request: HttpRequest, admin_site: AdminSite | None = None) -> 
     The package's default policy is staff-only (rule 1 in ``SECURITY.md``
     §3). ``AdminSite.has_permission`` is the consumer's escape hatch: if
     a consumer's custom site allows non-staff users to access the admin,
-    this package follows that decision (`ARCHITECTURE.md` §4.2).
+    this package follows that decision (``docs/api-contract.md`` §7).
     """
     if not _user_is_active_staff(request):
         return False

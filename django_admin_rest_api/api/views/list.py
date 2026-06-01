@@ -2,7 +2,7 @@
 
 Wire contract: ``docs/api-contract.md`` §3.
 
-Hard rules followed (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules followed (`SECURITY.md` §3):
 
 - Rule 1:  Staff + ``AdminSite.has_permission`` gate.
 - Rule 3:  Model resolved through ``admin.site._registry`` (B-7).
@@ -82,10 +82,9 @@ class ListView(View):
         2. ``resolve_model`` — 404 if the model isn't registered with
            the admin site or the user can't view it. Returning 404
            (not 403) is deliberate so the endpoint never reveals
-           "this model exists but you can't see it" (rule 12 /
-           ACCEPTANCE §4.3 S-11).
+           "this model exists but you can't see it" (rule 12).
         3. ``ModelAdmin.get_queryset(request)`` provides the starting
-           queryset — never ``Model.objects.all()`` (rule 10 / B-2).
+           queryset — never ``Model.objects.all()`` (rule 10).
 
         Then applies search, ordering, page-size clamp, and serializes
         each row through the conservative serializer.
@@ -235,8 +234,8 @@ class ListView(View):
             body["date_hierarchy"] = date_hierarchy
         response = JsonResponse(body, status=200)
         # No-store: per-user, permission-gated payload must never be
-        # cached by intermediate proxies or the browser. Extends
-        # ACCEPTANCE.md §4.6 S-30 (defined for 4xx) to 200 responses.
+        # cached by intermediate proxies or the browser
+        # (``docs/api-contract.md`` §1.2).
         response["Cache-Control"] = "no-store"
         return response
 

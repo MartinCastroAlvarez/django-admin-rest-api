@@ -11,7 +11,7 @@ instantiates *that* form, validates it (which runs the configured
 through ``user.set_password()``, so the password is hashed by Django's
 configured hasher and a plaintext value is never persisted.
 
-Hard rules (`SECURITY.md` §3, `ACCEPTANCE.md` §3.1):
+Hard rules (`SECURITY.md` §3):
 
 - Rule 1:  The admin's ``change_password_form`` + ``set_password`` are
            the only password machinery — no parallel implementation.
