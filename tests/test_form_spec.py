@@ -307,3 +307,55 @@ def test_add_form_template_triggers_legacy_iframe(superuser_client: Client) -> N
         body = superuser_client.get(ADD_URL).json()
     assert body["renderer"] == "legacy-iframe"
     assert body["legacy_url"].endswith("/add/")
+
+
+# --------------------------------------------------------------------------- #
+# Custom request-driven change_view fixture (Job) — the cross-repo contract.   #
+#                                                                              #
+# JobAdmin sets NO change_form_template; it overrides change_view to branch    #
+# on ?run_custom=1 and render a hand-rolled template. The resolver must probe  #
+# the view to tell the two paths apart (#59 / #70 / react #659).               #
+# --------------------------------------------------------------------------- #
+def _job_change_url(pk: int) -> str:
+    return f"/admin-api/api/v1/jobs/job/{pk}/form-spec/"
+
+
+@pytest.mark.django_db
+def test_job_path_a_is_stock_form_spec_with_textarea_metadata(superuser_client: Client) -> None:
+    """Path A — no ?run_custom: the stock change form is fully describable,
+    and ``formfield_for_dbfield`` surfaces the large-textarea on ``metadata``."""
+    from tests.test_project.jobs.models import Job
+
+    job = Job.objects.create(name="nightly", metadata={"k": "v"}, status="idle")
+    body = superuser_client.get(_job_change_url(job.pk)).json()
+
+    assert body["renderer"] == "form-spec"
+    meta = body["fields"]["metadata"]["widget"]
+    assert meta["kind"] == "textarea"
+    assert meta["attrs"]["class"] == "vLargeTextField"
+    # The other fields render with their default widgets.
+    assert body["fields"]["name"]["widget"]["kind"] == "text"
+    assert body["fields"]["status"]["widget"]["kind"] == "text"
+
+
+@pytest.mark.django_db
+def test_job_path_b_run_custom_triggers_legacy_iframe(superuser_client: Client) -> None:
+    """Path B — ?run_custom=1: change_view returns a custom render(), which
+    the JSON spec can't reproduce, so the resolver emits the legacy iframe
+    pointer with the query string preserved."""
+    from tests.test_project.jobs.models import Job
+
+    job = Job.objects.create(name="nightly", status="idle")
+    body = superuser_client.get(f"{_job_change_url(job.pk)}?run_custom=1").json()
+
+    assert body["renderer"] == "legacy-iframe"
+    assert body["legacy_url"] == f"/admin/jobs/job/{job.pk}/change/?run_custom=1"
+
+
+@pytest.mark.django_db
+def test_job_add_view_is_stock_form_spec(superuser_client: Client) -> None:
+    """The add view is not overridden, so the add route stays a JSON spec
+    (the probe only fires on the overridden change_view)."""
+    body = superuser_client.get("/admin-api/api/v1/jobs/job/add/form-spec/").json()
+    assert body["renderer"] == "form-spec"
+    assert body["fields"]["metadata"]["widget"]["kind"] == "textarea"

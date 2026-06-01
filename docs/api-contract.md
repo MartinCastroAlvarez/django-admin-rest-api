@@ -268,10 +268,18 @@ Normal response (`renderer: "form-spec"`):
   per-field errors under `fields[<name>]` — request-aware validation is
   identical across SPA, MCP, and the legacy admin.
 
-Escape hatch — when the ModelAdmin overrides `change_form_template` (or
-`add_form_template`), the form can't be faithfully rendered from JSON, so
-the endpoint returns a pointer to embed the legacy admin page in an iframe
-for that one view instead of silently dropping the customisation:
+Escape hatch — when the form can't be faithfully rendered from JSON, the
+endpoint returns a pointer to embed the legacy admin page in an iframe for
+that one view instead of silently dropping the customisation. Two cases
+trigger it:
+
+1. the ModelAdmin sets `change_form_template` / `add_form_template`; or
+2. the ModelAdmin overrides `change_view` / `add_view` and that override
+   renders a non-standard template for *this* request (e.g. a `?run_custom=1`
+   branch returning a hand-rolled `render(...)`). The resolver probes the
+   overridden view and falls back to the iframe when the response is not the
+   stock `admin/change_form.html`. The querystring is preserved on
+   `legacy_url`.
 
 ```json
 {"renderer": "legacy-iframe", "legacy_url": "/admin/auth/group/1/change/?…"}
