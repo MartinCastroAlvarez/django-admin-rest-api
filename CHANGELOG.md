@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-06-01
+
+### Added
+- **ModelAdmin form-spec endpoint** (`GET
+  /api/v1/<app>/<model>/<pk>/form-spec/` and `…/add/form-spec/`). Resolves
+  the *live* form the legacy `/admin/` change/add page would render —
+  honouring request-aware `get_form(request, obj, change)`,
+  `get_fieldsets(request, obj)`, `get_readonly_fields(request, obj)`,
+  `formfield_overrides`, custom `Form` classes, and the admin relation
+  widgets — and maps each field's resolved widget to a **closed
+  `widget.kind` enum** (every stdlib + admin widget, `custom` fallback with
+  the widget's dotted class path + `template_name`). The querystring is
+  forwarded so a `get_form` that branches on `request.GET` renders the
+  matching form (surfaced as `variant`). A `change_form_template` /
+  `add_form_template` override returns a `legacy-iframe` pointer instead of
+  silently dropping the customisation. The resolver
+  (`api/form_spec.build_form_spec`) is importable so the MCP
+  `admin.form_spec` tool shares one source of truth (contract §4.1, #59).
+- **Docstrings on the remaining undocumented public API**, bringing
+  public-function and class docstring coverage to 100% (#58).
+
 ### Changed
 - **Extracted a shared create/update write-pipeline helper and split the
   oversized handlers.** `create.post` and `update.patch` now delegate the
@@ -48,10 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contract sections or were removed. Added a pytest guard that fails the
   build when source cites a missing `*.md` file or a missing
   `docs/api-contract.md` `§N` section (#54).
-
-### Added
-- **Docstrings on the remaining undocumented public API**, bringing
-  public-function and class docstring coverage to 100% (#58).
 
 ## [1.3.0] — 2026-05-31
 

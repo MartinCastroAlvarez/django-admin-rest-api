@@ -493,6 +493,29 @@ def _paths() -> dict[str, Any]:
                 },
             },
         },
+        "/api/v1/{app_label}/{model_name}/{pk}/form-spec/": {
+            "get": {
+                "summary": (
+                    "ModelAdmin-resolved change form for one row "
+                    "(request-aware get_form/fieldsets/readonly + closed widget.kind enum)."
+                ),
+                "responses": {
+                    "200": {"description": "Form spec or legacy-iframe pointer (contract §4.1)."},
+                    "403": {"$ref": "#/components/responses/Error"},
+                    "404": {"$ref": "#/components/responses/Error"},
+                },
+            },
+        },
+        "/api/v1/{app_label}/{model_name}/add/form-spec/": {
+            "get": {
+                "summary": "ModelAdmin-resolved add form (contract §4.1).",
+                "responses": {
+                    "200": {"description": "Form spec or legacy-iframe pointer."},
+                    "403": {"$ref": "#/components/responses/Error"},
+                    "404": {"$ref": "#/components/responses/Error"},
+                },
+            },
+        },
         "/api/v1/{app_label}/{model_name}/autocomplete/": {
             "get": {
                 "summary": "Typeahead picker for high-cardinality FK targets.",
