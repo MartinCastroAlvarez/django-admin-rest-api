@@ -35,7 +35,6 @@ from django.forms.widgets import TextInput
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.actions_meta import actions_payload
 from django_admin_rest_api.api.inlines import inlines_payload
@@ -53,13 +52,14 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import not_found_response
 
 logger = logging.getLogger(__name__)
 
 
-class DetailView(View):
+class DetailView(BaseAPIView):
     """``GET /api/v1/<app_label>/<model_name>/<pk>/`` — single object."""
 
     http_method_names = ["get"]

@@ -27,7 +27,6 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api import conf
 from django_admin_rest_api.api.actions_meta import actions_payload
@@ -46,6 +45,7 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import not_found_response
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ _COUNT_RESERVED_PARAMS = frozenset({"page", "page_size", "ordering", "q", "all"}
 _ALL_VAR = "all"
 
 
-class ListView(View):
+class ListView(BaseAPIView):
     """``GET /api/v1/<app_label>/<model_name>/`` — paginated list."""
 
     http_method_names = ["get"]

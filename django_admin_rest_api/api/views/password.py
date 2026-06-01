@@ -59,13 +59,13 @@ from django.db import transaction
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import password_change_form_class
 from django_admin_rest_api.api.registry import resolve_model
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import form_errors_to_envelope
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import not_found_response
@@ -73,7 +73,7 @@ from django_admin_rest_api.api.writes import parse_json_body
 from django_admin_rest_api.api.writes import validation_failed
 
 
-class SetPasswordView(View):
+class SetPasswordView(BaseAPIView):
     """``POST /api/v1/<app_label>/<model_name>/<pk>/password/``."""
 
     http_method_names = ["post"]

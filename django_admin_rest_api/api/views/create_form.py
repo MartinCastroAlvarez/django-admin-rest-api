@@ -28,7 +28,6 @@ from django.db.models import Model
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
@@ -39,6 +38,7 @@ from django_admin_rest_api.api.registry import save_options
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.views.detail import _descriptor_for
 from django_admin_rest_api.api.views.detail import _fieldsets_payload
 from django_admin_rest_api.api.views.detail import _visible_field_names
@@ -47,7 +47,7 @@ from django_admin_rest_api.api.writes import not_found_response
 logger = logging.getLogger(__name__)
 
 
-class AddFormView(View):
+class AddFormView(BaseAPIView):
     """``GET /api/v1/<app_label>/<model_name>/add/`` — empty create form."""
 
     http_method_names = ["get"]

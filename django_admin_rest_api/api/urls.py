@@ -17,13 +17,13 @@ from typing import Any
 from django.http import HttpRequest
 from django.http import HttpResponseBase
 from django.urls import path
-from django.views.generic import View
 
 from django_admin_rest_api.api.panels import PanelView
 from django_admin_rest_api.api.views.actions import ActionView
 from django_admin_rest_api.api.views.auth import LoginView
 from django_admin_rest_api.api.views.auth import LogoutView
 from django_admin_rest_api.api.views.autocomplete import AutocompleteView
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.views.bulk import BulkUpdateView
 from django_admin_rest_api.api.views.create import CreateView
 from django_admin_rest_api.api.views.create_form import AddFormView
@@ -40,7 +40,7 @@ from django_admin_rest_api.api.views.schema import SchemaView
 from django_admin_rest_api.api.views.update import UpdateView
 
 
-class CollectionView(View):
+class CollectionView(BaseAPIView):
     """Dispatch GET → list, POST → create for ``/<app>/<model>/``.
 
     The collection URL serves two HTTP verbs; rather than overloading
@@ -59,7 +59,7 @@ class CollectionView(View):
         return CreateView.as_view()(request, *args, **kwargs)
 
 
-class InstanceView(View):
+class InstanceView(BaseAPIView):
     """Dispatch GET / PATCH / DELETE for ``/<app>/<model>/<pk>/``.
 
     Same pattern as :class:`CollectionView` — per-verb dispatch keeps

@@ -24,11 +24,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.audit import recent_actions_for_user
 
 # Default / ceiling for the number of entries returned. Django's index
@@ -44,7 +44,7 @@ _ACTION_LABELS: dict[int, str] = {
 }
 
 
-class RecentActionsView(View):
+class RecentActionsView(BaseAPIView):
     """Return the signed-in user's recent admin actions (index parity)."""
 
     http_method_names = ["get"]

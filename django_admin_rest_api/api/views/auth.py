@@ -60,10 +60,10 @@ from django.contrib.auth import logout as auth_logout
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
+from django_admin_rest_api.api.views.base import BaseAPIView
 
 # A single generic rejection for every failure mode of the login
 # endpoint. Using one message for "no such user", "wrong password",
@@ -107,7 +107,7 @@ def _user_payload(user: Any) -> dict[str, Any]:
     }
 
 
-class LoginView(View):
+class LoginView(BaseAPIView):
     """``POST /api/v1/login/`` — establish a session from credentials.
 
     Body: ``{"username": "...", "password": "..."}``. On success returns
@@ -165,7 +165,7 @@ class LoginView(View):
         return _no_store(JsonResponse({"user": _user_payload(user)}, status=200))
 
 
-class LogoutView(View):
+class LogoutView(BaseAPIView):
     """``POST /api/v1/logout/`` — flush the current session.
 
     Idempotent: a logout while already anonymous is a harmless ``200``

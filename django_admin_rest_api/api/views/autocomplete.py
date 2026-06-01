@@ -42,7 +42,6 @@ from typing import Any
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api import conf
 from django_admin_rest_api.api.permissions import forbidden_response
@@ -50,6 +49,7 @@ from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import resolve_model
 from django_admin_rest_api.api.serializers import label_for
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import bad_request
 from django_admin_rest_api.api.writes import not_found_response
 
@@ -60,7 +60,7 @@ _AUTOCOMPLETE_MAX_PAGE_SIZE = 50
 _AUTOCOMPLETE_DEFAULT_PAGE_SIZE = 20
 
 
-class AutocompleteView(View):
+class AutocompleteView(BaseAPIView):
     """``GET /api/v1/<app_label>/<model_name>/autocomplete/?q=<term>``."""
 
     http_method_names = ["get"]

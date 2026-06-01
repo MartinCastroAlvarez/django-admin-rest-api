@@ -32,6 +32,7 @@ Codes used:
 | `not_found`                 | 404    | Unknown model, unknown pk, unknown action name. Deny-by-default — never reveals whether the object exists. |
 | `bad_request`               | 400    | Malformed JSON body, missing required key, `pks` over `MAX_ACTION_PKS`, validation cannot run for some other input-shape reason. |
 | `validation_failed`         | 400    | `ModelForm.is_valid()` returned False; per-field errors in `error.fields`. |
+| `method_not_allowed`        | 405    | HTTP method not implemented by the endpoint. The `Allow` response header lists the permitted methods. |
 | `conflict`                  | 409    | Optimistic-concurrency miss on `update`. |
 
 ### 1.2 Success cache header

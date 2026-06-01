@@ -20,18 +20,18 @@ from typing import Any
 from django.db import transaction
 from django.http import HttpRequest
 from django.http import HttpResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import resolve_model
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import log_deletion
 from django_admin_rest_api.api.writes import not_found_response
 
 
-class DestroyView(View):
+class DestroyView(BaseAPIView):
     """``DELETE /api/v1/<app_label>/<model_name>/<pk>/``.
 
     The class name follows DRF's verb convention (``destroy``) to
