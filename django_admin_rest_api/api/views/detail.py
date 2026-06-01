@@ -17,6 +17,7 @@ Hard rules (`SECURITY.md` §3):
 
 from __future__ import annotations
 
+import logging
 from contextlib import suppress
 from typing import Any
 from typing import Final
@@ -36,6 +37,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 from django.views.generic import View
 
+from django_admin_rest_api.api.actions_meta import actions_payload
 from django_admin_rest_api.api.inlines import inlines_payload
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
@@ -51,9 +53,10 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
-from django_admin_rest_api.api.views.actions import actions_payload
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import not_found_response
+
+logger = logging.getLogger(__name__)
 
 
 class DetailView(View):
@@ -184,6 +187,10 @@ def _view_on_site_url(model_admin: ModelAdmin, obj: Model) -> str | None:
             url = get_absolute_url()
             return str(url) if url else None
     except Exception:
+        # Best-effort: a consumer ``view_on_site`` callable or the model's
+        # ``get_absolute_url`` may raise; omit the link rather than 500 the
+        # detail view. Kept broad on purpose; logged.
+        logger.warning("view_on_site / get_absolute_url failed; omitting link", exc_info=True)
         return None
     return None
 
@@ -224,9 +231,13 @@ def _fieldsets_payload(
     returned as the single "default" group so the client always has at
     least one section to render.
     """
+    # Best-effort: a consumer ``get_fieldsets`` override may raise; fall back
+    # to the flat default below rather than 500 the detail view. Kept broad
+    # on purpose; logged.
     try:
         raw = model_admin.get_fieldsets(request, obj) or ()
     except Exception:
+        logger.warning("get_fieldsets failed; using flat fallback", exc_info=True)
         raw = ()
     if not raw:
         return [
@@ -611,12 +622,15 @@ def _readonly_callable_descriptor(
         # object behind the add-form. ``getattr(obj, name, None)`` only
         # swallows ``AttributeError``, so any other exception from the
         # property getter would otherwise propagate and 500 the endpoint
-        # (Issue #275).
+        # (Issue #275). Both catches are best-effort, kept broad on
+        # purpose; logged so a misbehaving getter is observable.
+        logger.warning("lookup_field failed for readonly field %r; trying getattr", name)
         try:
             value = getattr(obj, name, None)
             if callable(value):
                 value = value()
         except Exception:
+            logger.warning("resolving readonly field %r failed; using null", name, exc_info=True)
             value = None
     return {
         "type": "unsupported",
@@ -647,20 +661,28 @@ def _serialize_file_value(value: Any) -> dict[str, Any] | None:
     name = getattr(value, "name", "") or ""
     if not name:
         return None
+    # Best-effort: ``url`` / ``size`` defer to the consumer's storage backend
+    # and may raise (e.g. a remote HEAD failing); degrade to ``None`` for that
+    # attribute rather than 500 the detail view. Kept broad on purpose; logged.
     try:
         url = value.url
     except Exception:
+        logger.warning("reading file url failed for %r; using null", name, exc_info=True)
         url = None
     try:
         size = value.size
     except Exception:
+        logger.warning("reading file size failed for %r; using null", name, exc_info=True)
         size = None
     return {"name": name, "url": url, "size": size}
 
 
 def _field_label(model_admin: ModelAdmin, model: type[Model], name: str) -> str:
     """Human-readable label for a field (Django's own helper, with fallback)."""
+    # Best-effort: ``label_for_field`` resolves a possibly consumer-defined
+    # callable; fall back to the raw name rather than 500. Kept broad; logged.
     try:
         return str(label_for_field(name, model, model_admin))
     except Exception:
+        logger.warning("label_for_field failed for %r; using raw name", name, exc_info=True)
         return name

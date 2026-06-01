@@ -22,6 +22,7 @@ Hard rules (`SECURITY.md` §3):
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.contrib.admin.options import InlineModelAdmin
@@ -29,6 +30,7 @@ from django.contrib.admin.options import ModelAdmin
 from django.contrib.admin.options import TabularInline
 from django.contrib.admin.utils import label_for_field
 from django.contrib.admin.utils import lookup_field
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import ForeignKey
 from django.db.models import ManyToManyField
 from django.db.models import Model
@@ -42,6 +44,8 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
+
+logger = logging.getLogger(__name__)
 
 
 def inlines_payload(
@@ -91,14 +95,19 @@ def _get_inline_instances(
 ) -> list[InlineModelAdmin]:
     """Resolve the parent admin's inline instances.
 
-    Defensive: a typo'd ``inlines`` entry or an inline whose
-    ``InlineModelAdmin.get_queryset`` raises must not break the
-    parent detail view. Errors are swallowed and the offending
-    inline is skipped.
+    Best-effort: a typo'd ``inlines`` entry or an inline whose
+    ``get_inline_instances`` raises must not break the parent detail
+    view. The broad catch is kept on purpose; it is logged so the
+    failure is observable and the offending inline is skipped.
     """
     try:
         return list(model_admin.get_inline_instances(request, obj=parent) or ())
     except Exception:  # pragma: no cover — admin author error
+        logger.warning(
+            "get_inline_instances failed for %r; surfacing no inlines",
+            type(model_admin).__name__,
+            exc_info=True,
+        )
         return []
 
 
@@ -275,6 +284,10 @@ def _fields_meta(
         try:
             label = label_for_field(name, child_model, inline)
         except Exception:  # pragma: no cover
+            # Best-effort: ``label_for_field`` resolves a possibly
+            # consumer-defined callable; fall back to the raw name rather
+            # than 500 the header. Kept broad on purpose; logged.
+            logger.warning("label_for_field failed for inline field %r", name, exc_info=True)
             label = name
         model_field = safe_get_field(child_model, name)
         field_type = field_type_for(model_field) if model_field is not None else "unsupported"
@@ -312,9 +325,17 @@ def _password_redacted_fields(
     into echoing (``render_value=True``) is left alone. Degrades to an empty
     set on any error — never 500s the parent detail.
     """
+    # Best-effort: building the inline formset runs consumer admin code;
+    # degrade to "redact nothing" rather than 500 the parent detail. Kept
+    # broad on purpose; logged.
     try:
         base_fields = inline.get_formset(request, parent).form.base_fields
     except Exception:  # pragma: no cover - defensive, mirrors this module
+        logger.warning(
+            "get_formset failed for inline %r; skipping password redaction",
+            type(inline).__name__,
+            exc_info=True,
+        )
         return set()
     redacted: set[str] = set()
     for name, field in base_fields.items():
@@ -333,9 +354,17 @@ def _rows_for_inline(
     admin_site: Any = None,
 ) -> list[dict[str, Any]]:
     """Fetch + serialize the child rows attached to ``parent``."""
+    # Best-effort: ``get_queryset`` is consumer admin code and the filter
+    # touches the DB; degrade to an empty row list rather than 500 the
+    # parent detail. Kept broad on purpose; logged.
     try:
         queryset = inline.get_queryset(request).filter(**{fk_name: parent.pk})
     except Exception:  # pragma: no cover
+        logger.warning(
+            "get_queryset failed for inline %r; surfacing no rows",
+            type(inline).__name__,
+            exc_info=True,
+        )
         return []
     # Fields the admin masks with PasswordInput: redact their value (#504),
     # computed once for the whole inline rather than per row.
@@ -352,7 +381,7 @@ def _rows_for_inline(
             model_field = None
             try:
                 model_field = inline.model._meta.get_field(name)
-            except Exception:
+            except FieldDoesNotExist:
                 model_field = None
             if model_field is None:
                 # No underlying model field: the inline lists a display
@@ -370,11 +399,17 @@ def _rows_for_inline(
                     # *raise* (not just be missing), and getattr's default
                     # only swallows AttributeError, so any other exception
                     # from the getter would 500 the parent detail (#275).
+                    # Both catches are per-field best-effort, kept broad on
+                    # purpose; logged so a misbehaving getter is observable.
+                    logger.warning("lookup_field failed for inline field %r; trying getattr", name)
                     try:
                         value = getattr(obj, name, None)
                         if callable(value):
                             value = value()
                     except Exception:
+                        logger.warning(
+                            "resolving inline field %r failed; using null", name, exc_info=True
+                        )
                         value = None
                 fields_payload[name] = serialize_value(value)
                 continue
@@ -384,9 +419,16 @@ def _rows_for_inline(
                     value, admin_site=admin_site, request=request
                 )
             elif isinstance(model_field, ManyToManyField):
+                # Best-effort: materializing the M2M hits the DB; degrade to
+                # an empty list rather than 500 the row. Kept broad; logged.
                 try:
                     related = list(value.all()) if value is not None else []
                 except Exception:
+                    logger.warning(
+                        "reading M2M inline field %r failed; using empty list",
+                        name,
+                        exc_info=True,
+                    )
                     related = []
                 fields_payload[name] = [
                     serialize_fk_value(r, admin_site=admin_site, request=request) for r in related

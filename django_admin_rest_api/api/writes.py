@@ -40,6 +40,8 @@ from typing import Any
 from django.contrib.admin.options import ModelAdmin
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.db import transaction
 from django.db.models import ForeignKey
 from django.db.models import ManyToManyField
 from django.db.models import Model
@@ -47,6 +49,10 @@ from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
 
+from django_admin_rest_api.api.inlines_write import InlinePermissionDenied
+from django_admin_rest_api.api.inlines_write import InlineValidationError
+from django_admin_rest_api.api.inlines_write import apply_inline_writes
+from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.serializers import filter_sensitive
 from django_admin_rest_api.api.serializers import is_sensitive_field_name
 from django_admin_rest_api.api.serializers import safe_get_field
@@ -525,6 +531,78 @@ def log_change(
     """
     message = model_admin.construct_change_message(request, form, [], add=False)
     model_admin.log_change(request, obj, message)
+
+
+def save_through_admin(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    form: Any,
+    *,
+    change: bool,
+    inlines_payload: Any,
+) -> Model | HttpResponse:
+    """Run the shared create/update write pipeline (#55).
+
+    The create (``POST``) and update (``PATCH``) handlers ran a
+    byte-identical save sequence — ``form.save(commit=False)`` →
+    ``ModelAdmin.save_model`` → ``save_related`` → ``LogEntry`` →
+    optional inline formsets — inside one ``transaction.atomic()``, with
+    the same four-way exception translation. That duplicated block now
+    lives here so both handlers call the same code and any future
+    behavioural change lands in one place.
+
+    ``change`` selects the create vs change posture:
+
+    - ``False`` → ``save_model(..., change=False)`` + ``log_addition``.
+    - ``True``  → ``save_model(..., change=True)``  + ``log_change``.
+
+    The caller is responsible for building and validating ``form``
+    *before* calling this (so ``form.is_valid()`` failures still emit the
+    handler's own ``validation_failed`` envelope). On success the saved
+    instance is returned; on a handled failure the matching error
+    ``HttpResponse`` is returned, preserving the exact status codes and
+    error shapes the two handlers emitted before the extraction:
+
+    - :class:`InlinePermissionDenied` → 403 ``forbidden`` envelope.
+    - :class:`InlineValidationError`  → 400 ``validation_failed`` with
+      ``{"inlines": ...}``.
+    - :class:`~django.db.IntegrityError` (a constraint the form did not
+      catch — a uniqueness race or a DB-level constraint) → 409
+      ``conflict`` (#404). Caught *outside* the atomic block so it has
+      already exited cleanly.
+    - :class:`ValueError` (malformed ``inlines`` payload shape) → 400
+      with a fixed generic message, never echoing the exception text
+      (CodeQL ``py/stack-trace-exposure``).
+    """
+    log = log_change if change else log_addition
+    try:
+        with transaction.atomic():
+            instance: Model = form.save(commit=False)
+            model_admin.save_model(request, instance, form, change=change)
+            # Save M2M / related through the admin hook (#402) so a
+            # consumer's ``save_related`` override is honoured (the default
+            # just runs ``save_m2m``). Inline formsets flow through our own
+            # write path below, so the ``formsets`` list is empty here.
+            model_admin.save_related(request, form, [], change=change)
+            log(model_admin, request, instance, form)
+            # Inline formsets (#403 / #54 write half) round-trip in the SAME
+            # transaction as the parent write, so a child permission denial
+            # or a formset validation failure reverts the parent too.
+            if inlines_payload is not None:
+                inline_errors = apply_inline_writes(
+                    model_admin, request, instance, form, inlines_payload
+                )
+                if inline_errors is not None:
+                    raise InlineValidationError(inline_errors)
+    except InlinePermissionDenied:
+        return forbidden_response(request)
+    except InlineValidationError as exc:
+        return validation_failed({"inlines": exc.errors})
+    except IntegrityError:
+        return conflict_response()
+    except ValueError:
+        return bad_request("Malformed 'inlines' payload.")
+    return instance
 
 
 def log_deletion(

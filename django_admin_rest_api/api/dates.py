@@ -32,6 +32,7 @@ from typing import Any
 from typing import Final
 
 from django.contrib.admin.options import ModelAdmin
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Count
 from django.db.models import QuerySet
 from django.db.models.functions import Extract
@@ -189,7 +190,7 @@ def date_hierarchy_payload(
     model = model_admin.model
     try:
         field = model._meta.get_field(field_name)
-    except Exception:  # pragma: no cover — typo'd date_hierarchy
+    except FieldDoesNotExist:  # pragma: no cover — typo'd date_hierarchy
         return None
 
     internal_type = field.get_internal_type()

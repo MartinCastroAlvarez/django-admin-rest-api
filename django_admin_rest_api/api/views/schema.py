@@ -82,303 +82,363 @@ def _build_schema() -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- #
 # components.schemas — envelope shapes the contract uses everywhere           #
+#                                                                             #
+# Each envelope shape lives in its own ``_schema_*`` helper so the schemas    #
+# block reads as a flat assembly rather than one 300-line literal (#55). The  #
+# helpers return the exact same dict literals as before — this is a pure      #
+# extraction with no change to the emitted document.                          #
 # --------------------------------------------------------------------------- #
-def _components() -> dict[str, Any]:
-    type_enum = sorted(
+def _field_type_enum() -> list[str]:
+    """The closed ``FieldType`` vocabulary, sorted for determinism."""
+    return sorted(
         {"foreignkey", "manytomany", "choice", "unsupported"}
         | set(_TYPE_BY_INTERNAL.values())
         | set(_CUSTOM_TYPE_BY_INTERNAL.values())
     )
+
+
+def _schema_error() -> dict[str, Any]:
+    """``Error`` — the canonical error envelope (contract §6)."""
     return {
-        "schemas": {
-            "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+            "error": {
                 "type": "object",
-                "required": ["error"],
+                "required": ["code", "message"],
                 "properties": {
-                    "error": {
-                        "type": "object",
-                        "required": ["code", "message"],
-                        "properties": {
-                            "code": {
-                                "type": "string",
-                                "enum": [
-                                    "bad_request",
-                                    "validation_failed",
-                                    "forbidden",
-                                    "session_expired",
-                                    "not_found",
-                                    "method_not_allowed",
-                                    "conflict",
-                                    "internal_error",
-                                ],
-                            },
-                            "message": {"type": "string"},
-                            "fields": {
-                                "type": "object",
-                                "additionalProperties": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                            },
-                        },
-                    }
-                },
-            },
-            "FKEnvelope": {
-                "type": "object",
-                "required": ["id", "label"],
-                "properties": {
-                    "id": {},
-                    "label": {"type": "string"},
-                },
-            },
-            "FieldType": {"type": "string", "enum": type_enum},
-            "Column": {
-                "type": "object",
-                "required": ["name", "label", "sortable", "editable"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "label": {"type": "string"},
-                    "sortable": {"type": "boolean"},
-                    "editable": {"type": "boolean"},
-                },
-            },
-            "Filter": {
-                "type": "object",
-                "required": ["name", "label", "type"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "label": {"type": "string"},
-                    "type": {
+                    "code": {
                         "type": "string",
-                        "enum": ["boolean", "choice", "foreignkey", "date", "custom"],
+                        "enum": [
+                            "bad_request",
+                            "validation_failed",
+                            "forbidden",
+                            "session_expired",
+                            "not_found",
+                            "method_not_allowed",
+                            "conflict",
+                            "internal_error",
+                        ],
                     },
-                    "choices": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {"value": {}, "label": {"type": "string"}},
-                        },
-                    },
-                    "lookups": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {"value": {}, "label": {"type": "string"}},
-                        },
-                    },
-                    "to": {
-                        "type": "object",
-                        "properties": {
-                            "app_label": {"type": "string"},
-                            "model_name": {"type": "string"},
-                        },
-                    },
-                },
-            },
-            "ActionSpec": {
-                "type": "object",
-                "required": ["name", "label", "description", "requires_confirmation"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "label": {"type": "string"},
-                    "description": {"type": "string"},
-                    "requires_confirmation": {"type": "boolean"},
-                },
-            },
-            "DateHierarchy": {
-                "type": "object",
-                "required": ["field", "granularity_options", "active", "buckets"],
-                "properties": {
-                    "field": {"type": "string"},
-                    "granularity_options": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "active": {
-                        "type": "object",
-                        "properties": {
-                            "year": {"type": ["integer", "null"]},
-                            "month": {"type": ["integer", "null"]},
-                            "day": {"type": ["integer", "null"]},
-                        },
-                    },
-                    "buckets": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["value", "count"],
-                            "properties": {
-                                "value": {"type": "integer"},
-                                "count": {"type": "integer"},
-                            },
-                        },
-                    },
-                },
-            },
-            "ListResponse": {
-                "type": "object",
-                "required": [
-                    "app_label",
-                    "model_name",
-                    "pk_field",
-                    "permissions",
-                    "columns",
-                    "search_fields",
-                    "filters",
-                    "actions",
-                    "page",
-                    "page_size",
-                    "total",
-                    "full_count",
-                    "results",
-                ],
-                "properties": {
-                    "app_label": {"type": "string"},
-                    "model_name": {"type": "string"},
-                    "pk_field": {
-                        "type": "string",
-                        "description": (
-                            "Name of the model's primary-key field "
-                            "(`model._meta.pk.name`). The client pins this column "
-                            "first, never truncates it, and keeps it visible."
-                        ),
-                    },
-                    "permissions": {
-                        "type": "object",
-                        "properties": {
-                            "view": {"type": "boolean"},
-                            "add": {"type": "boolean"},
-                            "change": {"type": "boolean"},
-                            "delete": {"type": "boolean"},
-                        },
-                    },
-                    "columns": {
-                        "type": "array",
-                        "items": {"$ref": "#/components/schemas/Column"},
-                    },
-                    "search_fields": {"type": "array", "items": {"type": "string"}},
-                    "filters": {
-                        "type": "array",
-                        "items": {"$ref": "#/components/schemas/Filter"},
-                    },
-                    "actions": {
-                        "type": "array",
-                        "items": {"$ref": "#/components/schemas/ActionSpec"},
-                    },
-                    "date_hierarchy": {"$ref": "#/components/schemas/DateHierarchy"},
-                    "page": {"type": "integer"},
-                    "page_size": {"type": "integer"},
-                    "total": {"type": "integer"},
-                    "full_count": {
-                        "type": ["integer", "null"],
-                        "description": (
-                            "Unfiltered (full-table) count from the admin's "
-                            "get_queryset — `show_full_result_count` parity. "
-                            "Equals `total` when the list isn't narrowed; "
-                            "`null` when `show_full_result_count` is False. "
-                            "The client renders 'X of Y' when it differs from total."
-                        ),
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "required": ["pk", "label", "fields"],
-                            "properties": {
-                                "pk": {},
-                                "label": {"type": "string"},
-                                "fields": {
-                                    "type": "object",
-                                    "additionalProperties": {},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            "FieldDescriptor": {
-                "type": "object",
-                "required": ["type", "label", "required", "readonly", "value"],
-                "properties": {
-                    "type": {"$ref": "#/components/schemas/FieldType"},
-                    "label": {"type": "string"},
-                    "required": {"type": "boolean"},
-                    "readonly": {"type": "boolean"},
-                    "help_text": {"type": "string"},
-                    "value": {},
-                    "to": {
-                        "type": "object",
-                        "properties": {
-                            "app_label": {"type": "string"},
-                            "model_name": {"type": "string"},
-                        },
-                    },
-                    "max_length": {"type": "integer"},
-                    "decimal_places": {"type": "integer"},
-                    "choices": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {"value": {}, "label": {"type": "string"}},
-                        },
-                    },
-                },
-            },
-            "DetailResponse": {
-                "type": "object",
-                "required": [
-                    "app_label",
-                    "model_name",
-                    "pk",
-                    "label",
-                    "permissions",
-                    "fieldsets",
-                    "fields",
-                ],
-                "properties": {
-                    "app_label": {"type": "string"},
-                    "model_name": {"type": "string"},
-                    "pk": {},
-                    "label": {"type": "string"},
-                    "permissions": {"type": "object"},
-                    "fieldsets": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": ["string", "null"]},
-                                "fields": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                            },
-                        },
-                    },
+                    "message": {"type": "string"},
                     "fields": {
                         "type": "object",
-                        "additionalProperties": {"$ref": "#/components/schemas/FieldDescriptor"},
-                    },
-                },
-            },
-            "RegistryResponse": {
-                "type": "object",
-                "required": ["mount", "user", "apps"],
-                "properties": {
-                    "mount": {"type": "string"},
-                    "user": {
-                        "type": "object",
-                        "properties": {
-                            "id": {},
-                            "username": {"type": "string"},
-                            "display_name": {"type": "string"},
-                            "is_staff": {"type": "boolean"},
-                            "is_superuser": {"type": "boolean"},
+                        "additionalProperties": {
+                            "type": "array",
+                            "items": {"type": "string"},
                         },
                     },
-                    "apps": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+    }
+
+
+def _schema_fk_envelope() -> dict[str, Any]:
+    """``FKEnvelope`` — the ``{id, label}`` shape for FK values."""
+    return {
+        "type": "object",
+        "required": ["id", "label"],
+        "properties": {
+            "id": {},
+            "label": {"type": "string"},
+        },
+    }
+
+
+def _schema_column() -> dict[str, Any]:
+    """``Column`` — one changelist column descriptor."""
+    return {
+        "type": "object",
+        "required": ["name", "label", "sortable", "editable"],
+        "properties": {
+            "name": {"type": "string"},
+            "label": {"type": "string"},
+            "sortable": {"type": "boolean"},
+            "editable": {"type": "boolean"},
+        },
+    }
+
+
+def _schema_filter() -> dict[str, Any]:
+    """``Filter`` — one ``list_filter`` descriptor."""
+    return {
+        "type": "object",
+        "required": ["name", "label", "type"],
+        "properties": {
+            "name": {"type": "string"},
+            "label": {"type": "string"},
+            "type": {
+                "type": "string",
+                "enum": ["boolean", "choice", "foreignkey", "date", "custom"],
+            },
+            "choices": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"value": {}, "label": {"type": "string"}},
                 },
             },
+            "lookups": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"value": {}, "label": {"type": "string"}},
+                },
+            },
+            "to": {
+                "type": "object",
+                "properties": {
+                    "app_label": {"type": "string"},
+                    "model_name": {"type": "string"},
+                },
+            },
+        },
+    }
+
+
+def _schema_action_spec() -> dict[str, Any]:
+    """``ActionSpec`` — one admin-action descriptor."""
+    return {
+        "type": "object",
+        "required": ["name", "label", "description", "requires_confirmation"],
+        "properties": {
+            "name": {"type": "string"},
+            "label": {"type": "string"},
+            "description": {"type": "string"},
+            "requires_confirmation": {"type": "boolean"},
+        },
+    }
+
+
+def _schema_date_hierarchy() -> dict[str, Any]:
+    """``DateHierarchy`` — the date-drilldown descriptor."""
+    return {
+        "type": "object",
+        "required": ["field", "granularity_options", "active", "buckets"],
+        "properties": {
+            "field": {"type": "string"},
+            "granularity_options": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "active": {
+                "type": "object",
+                "properties": {
+                    "year": {"type": ["integer", "null"]},
+                    "month": {"type": ["integer", "null"]},
+                    "day": {"type": ["integer", "null"]},
+                },
+            },
+            "buckets": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["value", "count"],
+                    "properties": {
+                        "value": {"type": "integer"},
+                        "count": {"type": "integer"},
+                    },
+                },
+            },
+        },
+    }
+
+
+def _schema_list_response() -> dict[str, Any]:
+    """``ListResponse`` — the changelist envelope (contract §3)."""
+    return {
+        "type": "object",
+        "required": [
+            "app_label",
+            "model_name",
+            "pk_field",
+            "permissions",
+            "columns",
+            "search_fields",
+            "filters",
+            "actions",
+            "page",
+            "page_size",
+            "total",
+            "full_count",
+            "results",
+        ],
+        "properties": {
+            "app_label": {"type": "string"},
+            "model_name": {"type": "string"},
+            "pk_field": {
+                "type": "string",
+                "description": (
+                    "Name of the model's primary-key field "
+                    "(`model._meta.pk.name`). The client pins this column "
+                    "first, never truncates it, and keeps it visible."
+                ),
+            },
+            "permissions": {
+                "type": "object",
+                "properties": {
+                    "view": {"type": "boolean"},
+                    "add": {"type": "boolean"},
+                    "change": {"type": "boolean"},
+                    "delete": {"type": "boolean"},
+                },
+            },
+            "columns": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Column"},
+            },
+            "search_fields": {"type": "array", "items": {"type": "string"}},
+            "filters": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Filter"},
+            },
+            "actions": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/ActionSpec"},
+            },
+            "date_hierarchy": {"$ref": "#/components/schemas/DateHierarchy"},
+            "page": {"type": "integer"},
+            "page_size": {"type": "integer"},
+            "total": {"type": "integer"},
+            "full_count": {
+                "type": ["integer", "null"],
+                "description": (
+                    "Unfiltered (full-table) count from the admin's "
+                    "get_queryset — `show_full_result_count` parity. "
+                    "Equals `total` when the list isn't narrowed; "
+                    "`null` when `show_full_result_count` is False. "
+                    "The client renders 'X of Y' when it differs from total."
+                ),
+            },
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["pk", "label", "fields"],
+                    "properties": {
+                        "pk": {},
+                        "label": {"type": "string"},
+                        "fields": {
+                            "type": "object",
+                            "additionalProperties": {},
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+
+def _schema_field_descriptor() -> dict[str, Any]:
+    """``FieldDescriptor`` — one detail/form field descriptor."""
+    return {
+        "type": "object",
+        "required": ["type", "label", "required", "readonly", "value"],
+        "properties": {
+            "type": {"$ref": "#/components/schemas/FieldType"},
+            "label": {"type": "string"},
+            "required": {"type": "boolean"},
+            "readonly": {"type": "boolean"},
+            "help_text": {"type": "string"},
+            "value": {},
+            "to": {
+                "type": "object",
+                "properties": {
+                    "app_label": {"type": "string"},
+                    "model_name": {"type": "string"},
+                },
+            },
+            "max_length": {"type": "integer"},
+            "decimal_places": {"type": "integer"},
+            "choices": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"value": {}, "label": {"type": "string"}},
+                },
+            },
+        },
+    }
+
+
+def _schema_detail_response() -> dict[str, Any]:
+    """``DetailResponse`` — the single-object envelope (contract §4)."""
+    return {
+        "type": "object",
+        "required": [
+            "app_label",
+            "model_name",
+            "pk",
+            "label",
+            "permissions",
+            "fieldsets",
+            "fields",
+        ],
+        "properties": {
+            "app_label": {"type": "string"},
+            "model_name": {"type": "string"},
+            "pk": {},
+            "label": {"type": "string"},
+            "permissions": {"type": "object"},
+            "fieldsets": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": ["string", "null"]},
+                        "fields": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+            },
+            "fields": {
+                "type": "object",
+                "additionalProperties": {"$ref": "#/components/schemas/FieldDescriptor"},
+            },
+        },
+    }
+
+
+def _schema_registry_response() -> dict[str, Any]:
+    """``RegistryResponse`` — the model-registry envelope (contract §2)."""
+    return {
+        "type": "object",
+        "required": ["mount", "user", "apps"],
+        "properties": {
+            "mount": {"type": "string"},
+            "user": {
+                "type": "object",
+                "properties": {
+                    "id": {},
+                    "username": {"type": "string"},
+                    "display_name": {"type": "string"},
+                    "is_staff": {"type": "boolean"},
+                    "is_superuser": {"type": "boolean"},
+                },
+            },
+            "apps": {"type": "array", "items": {"type": "object"}},
+        },
+    }
+
+
+def _components() -> dict[str, Any]:
+    """Assemble the ``components`` block from the per-envelope helpers."""
+    return {
+        "schemas": {
+            "Error": _schema_error(),
+            "FKEnvelope": _schema_fk_envelope(),
+            "FieldType": {"type": "string", "enum": _field_type_enum()},
+            "Column": _schema_column(),
+            "Filter": _schema_filter(),
+            "ActionSpec": _schema_action_spec(),
+            "DateHierarchy": _schema_date_hierarchy(),
+            "ListResponse": _schema_list_response(),
+            "FieldDescriptor": _schema_field_descriptor(),
+            "DetailResponse": _schema_detail_response(),
+            "RegistryResponse": _schema_registry_response(),
         },
         "responses": {
             "Error": {

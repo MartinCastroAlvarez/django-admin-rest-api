@@ -19,16 +19,11 @@ from typing import Any
 
 from django.core.exceptions import RequestDataTooBig
 from django.core.exceptions import TooManyFieldsSent
-from django.db import IntegrityError
-from django.db import transaction
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
 from django.views.generic import View
 
-from django_admin_rest_api.api.inlines_write import InlinePermissionDenied
-from django_admin_rest_api.api.inlines_write import InlineValidationError
-from django_admin_rest_api.api.inlines_write import apply_inline_writes
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
@@ -37,13 +32,12 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.writes import bad_request
 from django_admin_rest_api.api.writes import coerce_fk_values
 from django_admin_rest_api.api.writes import coerce_range_values
-from django_admin_rest_api.api.writes import conflict_response
 from django_admin_rest_api.api.writes import form_errors_to_envelope
-from django_admin_rest_api.api.writes import log_addition
 from django_admin_rest_api.api.writes import not_found_response
 from django_admin_rest_api.api.writes import parse_json_body
 from django_admin_rest_api.api.writes import readonly_or_excluded_names
 from django_admin_rest_api.api.writes import reject_forbidden_keys
+from django_admin_rest_api.api.writes import save_through_admin
 from django_admin_rest_api.api.writes import validation_failed
 from django_admin_rest_api.api.writes import writable_field_names
 
@@ -142,40 +136,20 @@ class CreateView(View):
         if not form.is_valid():
             return validation_failed(form_errors_to_envelope(form))
 
-        # A DB IntegrityError the form didn't catch (a uniqueness race, or a
-        # DB-level constraint not mirrored in form validation) must exit the
-        # atomic block before it's handled — catch outside (#404).
-        try:
-            with transaction.atomic():
-                instance = form.save(commit=False)
-                model_admin.save_model(request, instance, form, change=False)
-                # Save M2M / related through the admin hook (#402), not a
-                # bare form.save_m2m(), so a consumer's save_related override
-                # is honoured. The default save_related just runs save_m2m;
-                # inline formsets flow through our own write path, so the
-                # `formsets` list is empty here.
-                model_admin.save_related(request, form, [], change=False)
-                log_addition(model_admin, request, instance, form)
-                # Inline formsets (#403) round-trip in the SAME transaction
-                # as the parent create, so a child permission denial or a
-                # formset validation failure reverts the parent too — exactly
-                # how the update endpoint handles them.
-                if inlines_payload is not None:
-                    inline_errors = apply_inline_writes(
-                        model_admin, request, instance, form, inlines_payload
-                    )
-                    if inline_errors is not None:
-                        raise InlineValidationError(inline_errors)
-        except InlinePermissionDenied:
-            return forbidden_response(request)
-        except InlineValidationError as exc:
-            return validation_failed({"inlines": exc.errors})
-        except IntegrityError:
-            return conflict_response()
-        except ValueError:
-            # Malformed `inlines` payload shape (not a 500) — fixed generic
-            # message, never echoing exception text (CodeQL stack-trace).
-            return bad_request("Malformed 'inlines' payload.")
+        # Shared create/update write pipeline (#55): form.save → save_model
+        # → save_related → LogEntry → optional inlines, all atomic, with the
+        # IntegrityError / inline-error / malformed-payload translation. The
+        # create posture is ``change=False`` (save_model + log_addition).
+        result = save_through_admin(
+            model_admin,
+            request,
+            form,
+            change=False,
+            inlines_payload=inlines_payload,
+        )
+        if isinstance(result, HttpResponse):
+            return result
+        instance = result
 
         body = {
             "pk": instance.pk,

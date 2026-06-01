@@ -15,6 +15,7 @@ CI / a deploy preflight.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.conf import settings as django_settings
@@ -22,6 +23,10 @@ from django.contrib.admin.sites import AdminSite
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 from django.utils.module_loading import import_string
+
+from django_admin_rest_api.api.actions_meta import _classify_action
+
+logger = logging.getLogger(__name__)
 
 REQUIRED_MIDDLEWARE: tuple[str, ...] = (
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -118,19 +123,25 @@ def _action_count(model_admin: Any) -> dict[str, int]:
     sink the whole report.
     """
     try:
-        from django_admin_rest_api.api.views.actions import _classify_action
-
         # NB: get_actions normally needs a request; ``None`` works for
         # most stock admins. A ModelAdmin that hard-requires a request
         # falls through to the zero counter via the except below.
         raw = model_admin.get_actions(None) or {}
-    except Exception:  # noqa: BLE001 — wide on purpose: this is a report
+    except Exception:  # noqa: BLE001 — best-effort: a single misbehaving admin
+        # must not sink the whole smoke-test report. Kept broad on purpose;
+        # logged so the operator can still find the offending admin.
+        logger.warning(
+            "get_actions failed for %s; reporting zero actions",
+            type(model_admin).__name__,
+            exc_info=True,
+        )
         return {"batch": 0, "detail": 0, "total": 0}
     batch = detail = 0
     for _name, (callable_attr, _resolved_name, _desc) in raw.items():
         try:
             target = _classify_action(callable_attr)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 — best-effort report; default to batch
+            logger.warning("classifying action %r failed; defaulting to batch", _name)
             target = "batch"
         if target == "detail":
             detail += 1

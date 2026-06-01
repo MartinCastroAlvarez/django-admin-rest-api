@@ -17,6 +17,8 @@ from django.db.models import Model
 from django.http import HttpRequest
 from django.utils.module_loading import import_string
 
+from django_admin_rest_api.api.actions_meta import actions_payload
+
 
 def get_admin_site() -> AdminSite:
     """Resolve the configured admin site instance.
@@ -87,10 +89,6 @@ def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpReque
     Each entry mirrors the shape the list response exposes:
     ``{name, label, description, requires_confirmation}``.
     """
-    # Local import to break a registry ↔ actions cycle (the actions
-    # view imports `get_admin_site` from this module).
-    from django_admin_rest_api.api.views.actions import actions_payload
-
     meta = model._meta
     return {
         "app_label": meta.app_label,

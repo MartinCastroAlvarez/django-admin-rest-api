@@ -20,17 +20,21 @@ from __future__ import annotations
 import base64
 import datetime as _dt
 import decimal
+import logging
 import uuid
 from collections.abc import Callable
 from collections.abc import Iterable
 from typing import Any
 from typing import Final
 
+from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Field
 from django.db.models import ForeignKey
 from django.db.models import ManyToManyField
 from django.db.models import Model
 from django.utils.safestring import SafeString
+
+logger = logging.getLogger(__name__)
 
 SENSITIVE_NAME_SUBSTRINGS: Final[tuple[str, ...]] = (
     "password",
@@ -249,9 +253,17 @@ def label_for(obj: Model) -> str:
     serializer label objects identically — a UX win and a single
     point of defense for ``__str__`` exceptions.
     """
+    # Best-effort: a consumer model's ``__str__`` may raise (e.g. a missing
+    # related row mid-migration); fall back to ``<ClassName: pk>`` rather
+    # than crash a whole list/detail render. Kept broad on purpose; logged.
     try:
         return str(obj)
     except Exception:
+        logger.warning(
+            "__str__ raised for %s instance; using fallback label",
+            obj.__class__.__name__,
+            exc_info=True,
+        )
         return f"<{obj.__class__.__name__}: {obj.pk}>"
 
 
@@ -269,7 +281,7 @@ def safe_get_field(model_or_instance: type[Model] | Model, name: str) -> Field |
     """
     try:
         field = model_or_instance._meta.get_field(name)
-    except Exception:
+    except FieldDoesNotExist:
         return None
     # ``get_field`` may also return reverse relations / generic FKs,
     # which are not concrete ``Field``s. Callers want a real field or
