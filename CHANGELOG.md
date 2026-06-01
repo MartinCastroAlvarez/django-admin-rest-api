@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Extracted a shared create/update write-pipeline helper and split the
+  oversized handlers.** `create.post` and `update.patch` now delegate the
+  identical `form.save → save_model → save_related → LogEntry → inlines`
+  atomic block (plus its `IntegrityError` / inline-error / malformed-payload
+  translation) to `writes.save_through_admin`; the 303-line
+  `schema._components` literal was broken into per-envelope `_schema_*`
+  helpers. Pure restructuring — the wire contract and serialized output are
+  unchanged (#55).
+- **Broke the `registry ↔ permissions ↔ actions` import cycle.** The
+  action-metadata helpers (`actions_payload`, `_classify_action`) moved to a
+  new lower-layer `api/actions_meta.py`, so `registry` (and the management
+  command) import them at module top level instead of lazily from inside
+  functions. No remaining lazy-import workarounds for that cycle (#55).
 - **Consolidated the Python lint stack on Ruff (check + format) + mypy +
   bandit.** Removed pylint, flake8, Black, and standalone isort — their
   config blocks, dev-dependencies, pre-commit hooks, and CI steps — which

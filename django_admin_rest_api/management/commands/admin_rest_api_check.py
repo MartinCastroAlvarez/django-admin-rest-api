@@ -23,6 +23,8 @@ from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 from django.utils.module_loading import import_string
 
+from django_admin_rest_api.api.actions_meta import _classify_action
+
 REQUIRED_MIDDLEWARE: tuple[str, ...] = (
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -118,8 +120,6 @@ def _action_count(model_admin: Any) -> dict[str, int]:
     sink the whole report.
     """
     try:
-        from django_admin_rest_api.api.views.actions import _classify_action
-
         # NB: get_actions normally needs a request; ``None`` works for
         # most stock admins. A ModelAdmin that hard-requires a request
         # falls through to the zero counter via the except below.

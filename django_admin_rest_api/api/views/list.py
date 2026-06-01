@@ -29,6 +29,7 @@ from django.http import JsonResponse
 from django.views.generic import View
 
 from django_admin_rest_api import conf
+from django_admin_rest_api.api.actions_meta import actions_payload
 from django_admin_rest_api.api.dates import apply_filter as _apply_date_filter
 from django_admin_rest_api.api.dates import date_hierarchy_payload
 from django_admin_rest_api.api.dates import parse_active as _parse_date_active
@@ -44,7 +45,6 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
-from django_admin_rest_api.api.views.actions import actions_payload
 from django_admin_rest_api.api.writes import not_found_response
 
 # Query params the list view manages itself (pagination / sort / search);
