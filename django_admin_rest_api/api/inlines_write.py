@@ -96,7 +96,7 @@ def _inline_name(inline: InlineModelAdmin, parent: Model) -> str:
     child_model = inline.model
     fk_name = _resolve_fk_name(inline, parent)
     if fk_name is None:
-        return child_model._meta.model_name
+        return str(child_model._meta.model_name)
     if hasattr(child_model, fk_name + "_set"):
         return fk_name
     return fk_name + "_set"
