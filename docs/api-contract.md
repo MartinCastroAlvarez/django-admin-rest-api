@@ -340,7 +340,7 @@ Response (`200`):
 
 If the action returns an `HttpResponse` (e.g. an intermediate confirmation page), the envelope is `{"redirect": "<url>", "executed": true, ...}`.
 
-### 5.5 `POST /api/v1/<app>/<model>/bulk/`
+### 5.5 `PATCH /api/v1/<app>/<model>/bulk/`
 
 Apply the same field-value patch to a selection. Request: `{"pks": [...], "fields": {...}}`. Returns per-row `{ok, error}` envelopes. Capped at the same DoS guard as actions.
 
@@ -356,7 +356,7 @@ JSON mirror of `UserAdmin`'s password-change page. 404 unless the admin declares
 |-------|---------------------------------------------------------------|---------|
 | `GET` | `<app>/<model>/<pk>/history/`                                 | Paginated `LogEntry` timeline. |
 | `GET` | `<app>/<model>/<pk>/panel/<name>/`                            | Custom panel: handler return value verbatim. |
-| `POST`| `<app>/<model>/delete-preview/`                               | Cascade preview before destroy. |
+| `GET` | `<app>/<model>/<pk>/delete-preview/`                          | Cascade preview before destroy. |
 | `GET` | `<app>/<model>/autocomplete/?q=...`                           | Source for `ModelAdmin.autocomplete_fields`. |
 
 ### 6.1 History entries

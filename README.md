@@ -117,8 +117,8 @@ That's it. Your admin is now also a JSON API at `/admin-api/api/v1/...`.
 | `GET`   | `/api/v1/<app>/<model>/<pk>/`                  | Detail (read view as the HTML admin renders it)           |
 | `PATCH` | `/api/v1/<app>/<model>/<pk>/`                  | Update                                                    |
 | `DELETE`| `/api/v1/<app>/<model>/<pk>/`                  | Destroy (with `LogEntry`)                                 |
-| `POST`  | `/api/v1/<app>/<model>/bulk-update/`           | Bulk patch                                                |
-| `POST`  | `/api/v1/<app>/<model>/delete-preview/`        | Cascade preview (like the HTML admin's confirm page)      |
+| `PATCH` | `/api/v1/<app>/<model>/bulk/`                  | Bulk patch                                                |
+| `GET`   | `/api/v1/<app>/<model>/<pk>/delete-preview/`   | Cascade preview (like the HTML admin's confirm page)      |
 | `GET`   | `/api/v1/<app>/<model>/autocomplete/?q=…`      | `ModelAdmin.autocomplete_fields` source                   |
 | `POST`  | `/api/v1/<app>/<model>/actions/<name>/`        | Run a `ModelAdmin` action; one endpoint serves both shapes (batch / detail) — the runner inspects the callable's signature and either passes the user-narrowed `QuerySet` or `str(pk)` for the single selected row |
 | `GET`   | `/api/v1/<app>/<model>/<pk>/history/`          | The `LogEntry` history for one object                     |
