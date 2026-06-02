@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Minimal custom change template (#75 test fixture). Exercises the html-fragment
+renderer for a declared ``change_form_template`` override: the resolver renders
+this server-side and returns the inside of ``{% block content %}``.
+{% endcomment %}
+{% block content %}
+<form method="post" id="custom-change-form">
+  {% csrf_token %}
+  <p>Custom change form.</p>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

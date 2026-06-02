@@ -52,6 +52,13 @@ DEFAULTS: dict[str, Any] = {
     # When True, list responses include per-query timing in a debug
     # block. Off by default — only enable in development.
     "ENABLE_PROFILING": False,
+    # URL prefix the SPA mounts its change/add pages under (#75). When the
+    # html-fragment renderer's POST round-trip re-runs a legacy view that
+    # returns an ``HttpResponseRedirect`` to ``/admin/<app>/<model>/<pk>/change/``,
+    # that legacy target is rewritten onto this prefix so the SPA navigates
+    # within its own shell — e.g. ``/admin/jobs/job/1/change/`` →
+    # ``/admin2/jobs/job/1/change/``. Trailing slash is normalised.
+    "SPA_URL_PREFIX": "/admin2/",
 }
 
 
@@ -65,6 +72,7 @@ class _PackageSettings:
     MAX_ACTION_PKS: int = DEFAULTS["MAX_ACTION_PKS"]
     MAX_BULK_UPDATES: int = DEFAULTS["MAX_PAGE_SIZE"]
     ENABLE_PROFILING: bool = DEFAULTS["ENABLE_PROFILING"]
+    SPA_URL_PREFIX: str = DEFAULTS["SPA_URL_PREFIX"]
 
 
 def _load() -> _PackageSettings:

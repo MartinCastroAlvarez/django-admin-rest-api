@@ -500,7 +500,7 @@ def _paths() -> dict[str, Any]:
                     "(request-aware get_form/fieldsets/readonly + closed widget.kind enum)."
                 ),
                 "responses": {
-                    "200": {"description": "Form spec or legacy-iframe pointer (contract §4.1)."},
+                    "200": {"description": "Form spec or html-fragment (contract §4.1)."},
                     "403": {"$ref": "#/components/responses/Error"},
                     "404": {"$ref": "#/components/responses/Error"},
                 },
@@ -510,7 +510,20 @@ def _paths() -> dict[str, Any]:
             "get": {
                 "summary": "ModelAdmin-resolved add form (contract §4.1).",
                 "responses": {
-                    "200": {"description": "Form spec or legacy-iframe pointer."},
+                    "200": {"description": "Form spec or html-fragment."},
+                    "403": {"$ref": "#/components/responses/Error"},
+                    "404": {"$ref": "#/components/responses/Error"},
+                },
+            },
+        },
+        "/api/v1/{app_label}/{model_name}/{pk}/change/": {
+            "post": {
+                "summary": (
+                    "html-fragment POST round-trip: re-run the legacy change_view "
+                    "server-side; returns a redirect or another html-fragment (§4.1)."
+                ),
+                "responses": {
+                    "200": {"description": "redirect or html-fragment payload."},
                     "403": {"$ref": "#/components/responses/Error"},
                     "404": {"$ref": "#/components/responses/Error"},
                 },

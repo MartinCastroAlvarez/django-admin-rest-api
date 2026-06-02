@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-06-02
+
+### Added
+- **`html-fragment` renderer for custom change/add forms** (#75). When a
+  `ModelAdmin` declares a `change_form_template` / `add_form_template`, or an
+  overridden `change_view` / `add_view` renders a non-stock template for the
+  request, the form-spec endpoint now renders that template **server-side**
+  (with the SPA caller's auth + querystring), strips the surrounding admin
+  chrome — keeping only the inside of `{% block content %}` (`<html>`,
+  `<head>`, `<header id="header">`, `#nav-sidebar`, `#footer` dropped) — and
+  returns `{"renderer": "html-fragment", "html", "csrf_token", "submit_url",
+  "method", "messages"}`. Inline `<script>` / `<style>` inside the content
+  block are preserved verbatim (they're part of the integrator's form
+  contract). The SPA injects the fragment in place — no iframe, so no
+  `X-Frame-Options` / `SameSite` / cookie-bridge failure mode.
+- **POST round-trip** at `POST /api/v1/<app>/<model>/<pk>/change/?<qs>` (#75):
+  re-runs the legacy `change_view` server-side with the forwarded POST data +
+  querystring and returns either another `html-fragment` (validation errors —
+  including the Post/Redirect/Get-to-self idiom, followed server-side) or
+  `{"renderer": "redirect", "to": "…"}`. The legacy redirect target is
+  rewritten onto the configurable **`SPA_URL_PREFIX`** setting (default
+  `/admin2/`) so the SPA navigates within its own shell.
+- **Django messages capture** (#75): `messages.success(…)` / `messages.error(…)`
+  set by the rendered view are drained off the request and returned as
+  `messages: [{level, text}]` in the html-fragment / redirect payload (no
+  browser session round-trip), so the SPA can surface toasts.
+- **`SPA_URL_PREFIX` setting** (default `/admin2/`) controlling the
+  redirect→SPA URL mapping above.
+
+### Removed
+- **The `renderer: "legacy-iframe"` branch** (#75). Iframe embedding never
+  worked in practice (`X-Frame-Options: DENY` on admin responses, `SameSite`
+  cookie constraints, cross-origin SPA deployments), so it is dropped entirely
+  in favour of the server-rendered `html-fragment` renderer. The form-spec
+  endpoint no longer emits `legacy-iframe` / `legacy_url` on any code path.
+
 ## [1.6.0] — 2026-06-02
 
 ### Added

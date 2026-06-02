@@ -1,10 +1,17 @@
 {% extends "admin/base_site.html" %}
 {% comment %}
-Test-fixture custom template (#59). The form-spec resolver only needs this to
-render without error so the legacy-iframe probe sees a non-standard template;
-the full dual-listbox UX lives in the django-admin-react examples app.
+Test-fixture custom template (#59 / #75). The form-spec resolver renders this
+server-side, strips the admin chrome, and returns the inside of
+``{% block content %}`` as an html-fragment. The inline ``<style>`` / ``<script>``
+below are part of the integrator's form contract (dual-listbox widget CSS/JS)
+and MUST survive the chrome-stripping verbatim — the full dual-listbox UX lives
+in the django-admin-react examples app (#679).
 {% endcomment %}
 {% block content %}
+<style>
+  .dual-listbox { display: flex; gap: 1rem; }
+  .dual-listbox ul { list-style: none; min-width: 12rem; }
+</style>
 <h1>{{ title }}</h1>
 <form method="post" action="{{ request.get_full_path }}">
   {% csrf_token %}
@@ -31,4 +38,11 @@ the full dual-listbox UX lives in the django-admin-react examples app.
   <a href="{{ cancel_url }}">Cancel</a>
   <button type="submit">Queue steps</button>
 </form>
+<script>
+  // Dual-listbox drag-and-drop ordering — part of the form contract, must
+  // be injected verbatim by the SPA (it cannot reproduce this from the spec).
+  document.querySelectorAll(".dual-listbox li").forEach(function (li) {
+    li.setAttribute("draggable", "true");
+  });
+</script>
 {% endblock %}

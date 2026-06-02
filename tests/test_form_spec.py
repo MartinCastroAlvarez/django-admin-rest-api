@@ -10,7 +10,9 @@ Covers the mandatory permission matrix plus: payload shape, widget-kind
 mapping, request-aware ``get_form`` / ``get_fieldsets`` /
 ``get_readonly_fields``, ``formfield_overrides`` → ``widget.attrs``,
 custom widgets → ``kind: "custom"`` + ``widget_class``, and the
-``legacy-iframe`` escape hatch for ``change_form_template`` overrides.
+``html-fragment`` server-rendered renderer for ``change_form_template`` /
+``add_form_template`` overrides + custom ``change_view`` branches, including
+the POST round-trip (redirect / re-render) and Django messages capture (#75).
 """
 
 from __future__ import annotations
@@ -287,26 +289,34 @@ def test_custom_form_widget_surfaces_widget_class(superuser_client: Client) -> N
 
 
 # --------------------------------------------------------------------------- #
-# legacy-iframe escape hatch                                                   #
+# html-fragment renderer for change_form_template / add_form_template (#75).   #
+#                                                                              #
+# A ModelAdmin that declares a custom template can't be rebuilt from JSON, so  #
+# the resolver renders it server-side and returns the content-block HTML.      #
 # --------------------------------------------------------------------------- #
 @pytest.mark.django_db
-def test_change_form_template_triggers_legacy_iframe(superuser_client: Client) -> None:
+def test_change_form_template_triggers_html_fragment(superuser_client: Client) -> None:
     """A ModelAdmin that overrides change_form_template can't be rendered
-    from JSON — the spec returns a legacy-iframe pointer instead (#624)."""
+    from JSON — the spec renders it server-side and returns an html-fragment
+    with the admin chrome stripped (#75)."""
     g = Group.objects.create(name="legacy")
     with admin_attr(Group, change_form_template="admin/custom_change.html"):
         body = superuser_client.get(_change_url(g.pk)).json()
-    assert body["renderer"] == "legacy-iframe"
-    assert "legacy_url" in body
-    assert str(g.pk) in body["legacy_url"]
+    assert body["renderer"] == "html-fragment"
+    assert "<html" not in body["html"]
+    assert 'id="nav-sidebar"' not in body["html"]
+    assert "csrf_token" in body
+    assert body["submit_url"] == f"/admin/auth/group/{g.pk}/change/"
+    assert body["method"] == "POST"
 
 
 @pytest.mark.django_db
-def test_add_form_template_triggers_legacy_iframe(superuser_client: Client) -> None:
+def test_add_form_template_triggers_html_fragment(superuser_client: Client) -> None:
     with admin_attr(Group, add_form_template="admin/custom_add.html"):
         body = superuser_client.get(ADD_URL).json()
-    assert body["renderer"] == "legacy-iframe"
-    assert body["legacy_url"].endswith("/add/")
+    assert body["renderer"] == "html-fragment"
+    assert "<html" not in body["html"]
+    assert body["submit_url"].endswith("/add/")
 
 
 # --------------------------------------------------------------------------- #
@@ -339,17 +349,19 @@ def test_job_path_a_is_stock_form_spec_with_textarea_metadata(superuser_client: 
 
 
 @pytest.mark.django_db
-def test_job_path_b_run_custom_triggers_legacy_iframe(superuser_client: Client) -> None:
+def test_job_path_b_run_custom_triggers_html_fragment(superuser_client: Client) -> None:
     """Path B — ?run_custom=1: change_view returns a custom render(), which
-    the JSON spec can't reproduce, so the resolver emits the legacy iframe
-    pointer with the query string preserved."""
+    the JSON spec can't reproduce, so the resolver renders it server-side and
+    returns the content-block HTML with the querystring preserved on the
+    submit URL (#75)."""
     from tests.test_project.jobs.models import Job
 
     job = Job.objects.create(name="nightly", status="idle")
     body = superuser_client.get(f"{_job_change_url(job.pk)}?run_custom=1").json()
 
-    assert body["renderer"] == "legacy-iframe"
-    assert body["legacy_url"] == f"/admin/jobs/job/{job.pk}/change/?run_custom=1"
+    assert body["renderer"] == "html-fragment"
+    assert body["submit_url"] == f"/admin/jobs/job/{job.pk}/change/?run_custom=1"
+    assert "<form" in body["html"]
 
 
 @pytest.mark.django_db
@@ -359,3 +371,79 @@ def test_job_add_view_is_stock_form_spec(superuser_client: Client) -> None:
     body = superuser_client.get("/admin-api/api/v1/jobs/job/add/form-spec/").json()
     assert body["renderer"] == "form-spec"
     assert body["fields"]["metadata"]["widget"]["kind"] == "textarea"
+
+
+# --------------------------------------------------------------------------- #
+# html-fragment renderer contract (#75).                                       #
+#                                                                              #
+# A ModelAdmin whose change_view renders a custom template is rendered         #
+# server-side; the form-spec returns the inside of {% block content %} as an   #
+# html-fragment (no iframe). POSTing to the companion change route re-runs the #
+# legacy view and returns either another html-fragment (validation errors) or  #
+# a redirect payload mapped onto the SPA URL prefix. Django messages are       #
+# captured into the JSON response.                                             #
+# --------------------------------------------------------------------------- #
+def _job_post_url(pk: int) -> str:
+    return f"/admin-api/api/v1/jobs/job/{pk}/change/"
+
+
+@pytest.mark.django_db
+def test_form_spec_returns_html_fragment_for_custom_template(superuser_client: Client) -> None:
+    from tests.test_project.jobs.models import Job
+
+    job = Job.objects.create(name="nightly", status="idle")
+    response = superuser_client.get(f"{_job_change_url(job.pk)}?run_custom=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["renderer"] == "html-fragment"
+    # The integrator's form is rendered server-side...
+    assert "<form" in body["html"]
+    # ...with the admin chrome stripped.
+    assert "<html" not in body["html"]
+    assert 'id="nav-sidebar"' not in body["html"]
+    assert 'id="footer"' not in body["html"]
+    assert 'id="header"' not in body["html"]
+    # Inline <script>/<style> inside the content block survive verbatim.
+    assert "<script" in body["html"]
+    assert "<style" in body["html"]
+    assert "dual-listbox" in body["html"]
+    # csrf_token valid for the same session, submit_url with querystring forwarded.
+    assert "csrf_token" in body
+    assert body["csrf_token"]
+    assert body["method"] == "POST"
+    assert body["submit_url"] == f"/admin/jobs/job/{job.pk}/change/?run_custom=1"
+
+
+@pytest.mark.django_db
+def test_form_spec_post_routes_into_legacy_view(superuser_client: Client) -> None:
+    from tests.test_project.jobs.models import Job
+
+    job = Job.objects.create(name="nightly", status="idle")
+    response = superuser_client.post(
+        f"{_job_post_url(job.pk)}?run_custom=1",
+        data={"selected_steps": ["step-1", "step-2"]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["renderer"] == "redirect"
+    assert body["to"] == f"/admin2/jobs/job/{job.pk}/change/"
+    messages = [m["text"] for m in body.get("messages", [])]
+    assert "Queued step-1 → step-2" in messages
+
+
+@pytest.mark.django_db
+def test_form_spec_post_validation_error_renders_html_fragment_again(
+    superuser_client: Client,
+) -> None:
+    from tests.test_project.jobs.models import Job
+
+    job = Job.objects.create(name="nightly", status="idle")
+    response = superuser_client.post(
+        f"{_job_post_url(job.pk)}?run_custom=1",
+        data={"selected_steps": []},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["renderer"] == "html-fragment"
+    messages = [m["text"] for m in body.get("messages", [])]
+    assert "Pick at least one step." in messages

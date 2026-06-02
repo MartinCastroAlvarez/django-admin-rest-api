@@ -33,6 +33,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 
 from django_admin_rest_api.api.form_spec import build_form_spec
+from django_admin_rest_api.api.form_spec import render_change_post
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
@@ -95,5 +96,57 @@ class FormSpecView(BaseAPIView):
         payload = build_form_spec(model, model_admin, request, obj, admin_site=admin_site)
         response = JsonResponse(payload, status=200)
         # Per-user, permission-gated payload — never cached (contract §1.2).
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+class ChangePostView(BaseAPIView):
+    """``POST <app>/<model>/<pk>/change/?<qs>`` — html-fragment POST round-trip.
+
+    The companion route to the html-fragment renderer (#75). When the SPA
+    submits a server-rendered custom form, it POSTs back here; this re-runs the
+    ModelAdmin's real ``change_view`` server-side (forwarding the POST data +
+    original querystring) and returns either:
+
+    - ``{"renderer": "redirect", "to": "<SPA url>", "messages": […]}`` when the
+      view redirects (success), the legacy target mapped onto the SPA prefix; or
+    - another ``html-fragment`` when the view re-renders (validation errors).
+
+    Same gates as the change form-spec route (`SECURITY.md` §3): staff +
+    ``AdminSite.has_permission``, model resolved via the registry, per-object
+    ``has_change_permission`` (a POST mutates, so the gate is change, not view).
+    CSRF is the consumer's middleware (no ``@csrf_exempt``).
+    """
+
+    http_method_names = ["post"]
+
+    def post(
+        self,
+        request: HttpRequest,
+        app_label: str,
+        model_name: str,
+        pk: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        """Re-run the legacy change_view and return a redirect/html-fragment."""
+        admin_site = get_admin_site()
+        if not is_admin_user(request, admin_site=admin_site):
+            return forbidden_response(request)
+
+        resolved = resolve_model(admin_site, request, app_label, model_name)
+        if resolved is None:
+            return not_found_response()
+        model, model_admin = resolved
+
+        obj = load_object_or_none(model, model_admin, request, pk)
+        if obj is None:
+            return not_found_response()
+        # A POST mutates: gate on change, not view (mirrors the legacy admin).
+        if not model_admin.has_change_permission(request, obj):
+            return forbidden_response(request)
+
+        payload = render_change_post(model_admin, request, obj)
+        response = JsonResponse(payload, status=200)
         response["Cache-Control"] = "no-store"
         return response
