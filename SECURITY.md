@@ -60,9 +60,62 @@ build:
   parameter on list endpoints, regardless of the model's
   `list_per_page`. Override only if your dataset genuinely supports
   it and you have monitoring for slow queries.
-- Bulk endpoints (`bulk-update`, `actions`, `delete-preview`) apply
+- `MAX_BULK_UPDATES` caps the number of rows in a single
+  `PATCH .../bulk/` batch. It is single-sourced: when unset it tracks
+  `MAX_PAGE_SIZE` (so lowering `MAX_PAGE_SIZE` for DoS reasons tightens
+  the bulk cap too), and `0` disables it.
+- Bulk endpoints (`bulk`, `actions`, `delete-preview`) apply
   the same per-object permission gate over the selection — there is
   no "skip permissions for batches" code path.
+
+## Form-spec introspection probe (GET-idempotency requirement)
+
+The form-spec endpoint
+(`GET /api/v1/<app>/<model>/[<pk>|add]/form-spec/`) detects whether a
+`ModelAdmin` renders a custom change/add page so the SPA can fall back to
+an iframe. When — and only when — the admin **overrides** `change_view`
+or `add_view`, the resolver *invokes* that override with the live GET
+request to inspect the template it returns
+(`api/form_spec._renders_custom_template`).
+
+Because the override runs on a GET, it **must stay GET-idempotent**: a GET
+must not mutate state. This is already Django's own contract for those
+views (a GET renders the form; writes happen on POST), so a well-behaved
+override is unaffected. An override that performs a side effect on GET (an
+anti-pattern) would have that side effect triggered by a form-spec read,
+and any exception it raises is swallowed to the JSON-spec fallback. Keep
+`change_view` / `add_view` overrides read-only on GET.
+
+## Security logging
+
+The package emits one structured record on the dedicated
+`django_admin_rest_api.security` logger at each authorization-denial
+boundary — a 403 permission/session-expiry denial
+(`api/permissions.forbidden_response`) and a failed login
+(`api/views/auth`). Each record carries `{user, path, method, decision}`,
+where `user` is the surrogate pk (or `"anon"`) and `decision` is one of
+`forbidden` / `session_expired` / `login_failed`. The password and any
+other request-body PII are **never** logged. Wire the logger into your
+project's `LOGGING` config to alert on credential-stuffing,
+permission-probing, and IDOR-scan patterns:
+
+```python
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"security": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "django_admin_rest_api.security": {
+            "handlers": ["security"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+```
+
+Successful (allowed) requests are intentionally not logged here — only
+denials — so the channel stays signal-rich for alerting.
 
 ## Cross-references
 

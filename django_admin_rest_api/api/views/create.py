@@ -22,13 +22,13 @@ from django.core.exceptions import TooManyFieldsSent
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import resolve_model
 from django_admin_rest_api.api.serializers import label_for
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import bad_request
 from django_admin_rest_api.api.writes import coerce_fk_values
 from django_admin_rest_api.api.writes import coerce_range_values
@@ -42,7 +42,7 @@ from django_admin_rest_api.api.writes import validation_failed
 from django_admin_rest_api.api.writes import writable_field_names
 
 
-class CreateView(View):
+class CreateView(BaseAPIView):
     """``POST /api/v1/<app_label>/<model_name>/``."""
 
     http_method_names = ["post"]

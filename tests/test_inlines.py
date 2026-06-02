@@ -436,3 +436,52 @@ def test_inline_passwordinput_render_value_true_preserves_value() -> None:
         _EchoInline(ContentType, admin.site), ct, "content_type", ["name"], request
     )
     assert rows[0]["fields"]["name"] == "kept-value"
+
+
+# --------------------------------------------------------------------------- #
+# N+1 guard: inline FK columns are select_related, M2M prefetch_related (#71)  #
+# --------------------------------------------------------------------------- #
+@pytest.mark.django_db
+def test_inline_fk_column_is_select_related(django_assert_max_num_queries) -> None:
+    """An inline FK column does not issue one query per child row (#71).
+
+    ``Permission`` has a forward FK to ``ContentType``. With ``select_related``
+    applied, serializing N child rows that each render the ``content_type`` FK
+    column stays at a small, row-count-independent number of queries (the row
+    fetch JOINs the FK). Without the fix this was N+1.
+    """
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Permission
+    from django.contrib.contenttypes.models import ContentType
+    from django.test import RequestFactory
+
+    from django_admin_rest_api.api.inlines import _rows_for_inline
+
+    parent_ct = ContentType.objects.create(app_label="dar_n1", model="parent")
+    # All child Permissions FK back to the parent (the inline filters on
+    # fk_name=parent.pk). Each is a distinct Permission instance, so without
+    # select_related each row lazily re-fetches its content_type → N queries.
+    for i in range(10):
+        Permission.objects.create(content_type=parent_ct, codename=f"c{i}", name=f"P{i}")
+
+    class _PermInline(TabularInline):
+        model = Permission
+        fk_name = "content_type"
+
+    inline = _PermInline(Permission, admin.site)
+    request = RequestFactory().get("/")
+    request.user = get_user_model().objects.create_superuser(
+        username="inline-n1-su", email="n1@example.com", password="x"
+    )
+
+    # The FK column is select_related, so this is a small constant (one query
+    # for the rows + JOIN), nowhere near 10+. Generous bound to stay robust
+    # across Django versions / extra metadata lookups.
+    with django_assert_max_num_queries(4):
+        rows = _rows_for_inline(
+            inline, parent_ct, "content_type", ["content_type"], request, admin.site
+        )
+    assert len(rows) == 10
+    # And the FK envelope is actually populated (the select_related didn't
+    # break value resolution).
+    assert all(r["fields"]["content_type"]["label"] for r in rows)

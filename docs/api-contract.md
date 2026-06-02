@@ -32,6 +32,7 @@ Codes used:
 | `not_found`                 | 404    | Unknown model, unknown pk, unknown action name. Deny-by-default — never reveals whether the object exists. |
 | `bad_request`               | 400    | Malformed JSON body, missing required key, `pks` over `MAX_ACTION_PKS`, validation cannot run for some other input-shape reason. |
 | `validation_failed`         | 400    | `ModelForm.is_valid()` returned False; per-field errors in `error.fields`. |
+| `method_not_allowed`        | 405    | HTTP method not implemented by the endpoint. The `Allow` response header lists the permitted methods. |
 | `conflict`                  | 409    | Optimistic-concurrency miss on `update`. |
 
 ### 1.2 Success cache header
@@ -135,7 +136,8 @@ Response:
 | `label`       | Resolved label (`label_for_field` / `short_description` / verbose name). |
 | `sortable`    | `True` if the column appears in `get_sortable_by(request)`. |
 | `editable`    | `True` if in `list_editable`. |
-| `links`       | `True` if in `get_list_display_links` (the SPA links these to detail). |
+
+The changelist payload also carries a top-level **`list_display_links`** array: the column name(s) the SPA should link to the change page, resolved from `ModelAdmin.get_list_display_links(request, list_display)`. It honors `list_display_links = None` (linking disabled) by emitting `[]`, and the default (link the first column) otherwise. Only string column names round-trip; callable `list_display` entries are dropped.
 
 ### 3.3 `results[]`
 
@@ -197,6 +199,7 @@ Single-object descriptor for the change page:
 - `password_change.available = true` iff the admin declares `change_password_form` (i.e. `UserAdmin`).
 - `object_actions` shares the shape and source of `actions` on the list response — the consumer renders detail-target actions here. Clicks POST to the same runner URL as the changelist actions.
 - `fields[*].type` is one of the documented kinds: `string`, `integer`, `decimal`, `float`, `boolean`, `date`, `datetime`, `time`, `duration`, `uuid`, `json`, `array`, `range`, `foreign_key`, `many_to_many`, `file`, `email`, `url`, `image`, `unsupported`.
+- `fields[*].widget` is an optional presentational hint mirroring the `ModelAdmin` relation widgets: `radio` (`radio_fields`), `raw_id` (`raw_id_fields`), `shuttle_h` / `shuttle_v` (`filter_horizontal` / `filter_vertical`), `autocomplete` (a relation in `get_autocomplete_fields(request)` **whose target admin declares `search_fields`** — otherwise no hint), `password` / `textarea` (resolved from the bound form widget). Absent when the default control applies. (The form-spec §4.1 carries the same information in its closed `widget.kind` enum.)
 
 ### 4.1 `GET /api/v1/<app>/<model>/<pk>/form-spec/` and `…/add/form-spec/` — ModelAdmin form spec
 
@@ -267,6 +270,12 @@ Normal response (`renderer: "form-spec"`):
   re-runs the **same** resolved `get_form` through `is_valid()` and returns
   per-field errors under `fields[<name>]` — request-aware validation is
   identical across SPA, MCP, and the legacy admin.
+- On the **add** form-spec (`…/add/form-spec/`, `obj=None`) the payload also
+  carries `prepopulated_fields` — a `{target: [sources]}` map from
+  `ModelAdmin.prepopulated_fields`, restricted to rendered, non-readonly
+  targets — so a client can slugify-on-keystroke exactly like the legacy
+  add page. (Same shape the add-form schema endpoint `/add/` already emits.)
+  Absent / `{}` on the change form-spec.
 
 Escape hatch — when the form can't be faithfully rendered from JSON, the
 endpoint returns a pointer to embed the legacy admin page in an iframe for
@@ -340,9 +349,9 @@ Response (`200`):
 
 If the action returns an `HttpResponse` (e.g. an intermediate confirmation page), the envelope is `{"redirect": "<url>", "executed": true, ...}`.
 
-### 5.5 `POST /api/v1/<app>/<model>/bulk/`
+### 5.5 `PATCH /api/v1/<app>/<model>/bulk/`
 
-Apply the same field-value patch to a selection. Request: `{"pks": [...], "fields": {...}}`. Returns per-row `{ok, error}` envelopes. Capped at the same DoS guard as actions.
+Apply the same field-value patch to a selection. Request: `{"pks": [...], "fields": {...}}`. Returns per-row `{ok, error}` envelopes. The batch size is capped by the `MAX_BULK_UPDATES` setting (defaults to `MAX_PAGE_SIZE` when unset; `0` disables the cap) — a DoS guard against a single request materialising thousands of forms.
 
 ### 5.6 `POST /api/v1/<app>/<model>/<pk>/password/`
 
@@ -356,7 +365,7 @@ JSON mirror of `UserAdmin`'s password-change page. 404 unless the admin declares
 |-------|---------------------------------------------------------------|---------|
 | `GET` | `<app>/<model>/<pk>/history/`                                 | Paginated `LogEntry` timeline. |
 | `GET` | `<app>/<model>/<pk>/panel/<name>/`                            | Custom panel: handler return value verbatim. |
-| `POST`| `<app>/<model>/delete-preview/`                               | Cascade preview before destroy. |
+| `GET` | `<app>/<model>/<pk>/delete-preview/`                          | Cascade preview before destroy. |
 | `GET` | `<app>/<model>/autocomplete/?q=...`                           | Source for `ModelAdmin.autocomplete_fields`. |
 
 ### 6.1 History entries

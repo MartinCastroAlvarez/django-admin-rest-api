@@ -31,19 +31,19 @@ from typing import Any
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.serializers import _CUSTOM_TYPE_BY_INTERNAL
 from django_admin_rest_api.api.serializers import _TYPE_BY_INTERNAL
+from django_admin_rest_api.api.views.base import BaseAPIView
 
 OPENAPI_VERSION = "3.1.0"
 SCHEMA_VERSION = "v1"
 
 
-class SchemaView(View):
+class SchemaView(BaseAPIView):
     """``GET /api/v1/schema/`` — return the OpenAPI 3.1 doc."""
 
     http_method_names = ["get"]

@@ -21,15 +21,15 @@ from typing import Any
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import build_registry_payload
 from django_admin_rest_api.api.registry import get_admin_site
+from django_admin_rest_api.api.views.base import BaseAPIView
 
 
-class RegistryView(View):
+class RegistryView(BaseAPIView):
     """``GET /api/v1/registry/`` — registry of visible apps and models."""
 
     http_method_names = ["get"]

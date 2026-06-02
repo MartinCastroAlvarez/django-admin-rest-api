@@ -36,7 +36,6 @@ from django.db import transaction
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.actions_meta import _classify_action
 from django_admin_rest_api.api.actions_meta import actions_payload
@@ -44,6 +43,7 @@ from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
 from django_admin_rest_api.api.registry import get_admin_site
 from django_admin_rest_api.api.registry import resolve_model
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import bad_request
 from django_admin_rest_api.api.writes import not_found_response
 from django_admin_rest_api.api.writes import parse_json_body
@@ -55,7 +55,7 @@ from django_admin_rest_api.api.writes import parse_json_body
 __all__ = ["ActionView", "_classify_action", "actions_payload"]
 
 
-class ActionView(View):
+class ActionView(BaseAPIView):
     """``POST /api/v1/<app>/<model>/actions/<action_name>/``.
 
     Body: ``{"pks": [<pk>, ...], "confirmed": <bool>}``. ``confirmed``

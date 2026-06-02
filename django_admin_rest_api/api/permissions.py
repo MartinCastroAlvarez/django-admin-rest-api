@@ -23,6 +23,9 @@ and ``docs/api-contract.md`` §6 for the wire shape.
 
 from __future__ import annotations
 
+import contextlib
+import logging
+from typing import Any
 from typing import Final
 
 from django.conf import settings
@@ -30,8 +33,57 @@ from django.contrib.admin.sites import AdminSite
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 from django_admin_rest_api.api.registry import get_admin_site
+
+# Dedicated security logger (#67). Emits one structured record per authz
+# denial / failed login so operators can alert on credential-stuffing,
+# permission-probing, and IDOR-scan patterns from the package's own logs.
+# Records carry only ``{user, path, method, decision}`` — never a password,
+# never request-body PII. Operators wire it up via ``LOGGING`` under the
+# ``django_admin_rest_api.security`` logger name.
+security_logger = logging.getLogger("django_admin_rest_api.security")
+
+
+def _user_id_or_anon(request: HttpRequest | None) -> str:
+    """Return the request user's pk as a string, or ``"anon"``.
+
+    Never returns the username / email — only the surrogate pk — so the
+    log record carries no PII beyond an opaque identifier the operator can
+    correlate against their own user table.
+    """
+    if request is None:
+        return "anon"
+    user = getattr(request, "user", None)
+    if user is not None and getattr(user, "is_authenticated", False):
+        return str(getattr(user, "pk", "anon"))
+    return "anon"
+
+
+def log_security_event(request: HttpRequest | None, decision: str) -> None:
+    """Emit one structured ``django_admin_rest_api.security`` record.
+
+    ``decision`` is a short machine token (``forbidden``,
+    ``session_expired``, ``login_failed``). The ``extra`` dict carries the
+    structured fields so a JSON log formatter can index them; the message
+    string itself is deliberately free of any user-supplied value.
+    """
+    method = getattr(request, "method", "-") if request is not None else "-"
+    path = getattr(request, "path", "-") if request is not None else "-"
+    security_logger.info(
+        "security decision=%s user=%s method=%s path=%s",
+        decision,
+        _user_id_or_anon(request),
+        method,
+        path,
+        extra={
+            "user": _user_id_or_anon(request),
+            "path": path,
+            "method": method,
+            "decision": decision,
+        },
+    )
 
 
 def _user_is_active_staff(request: HttpRequest) -> bool:
@@ -72,14 +124,19 @@ def is_admin_user(request: HttpRequest, admin_site: AdminSite | None = None) -> 
     return bool(site.has_permission(request))
 
 
-_FORBIDDEN_BODY: Final[dict[str, dict[str, str]]] = {
-    "error": {"code": "forbidden", "message": "You do not have permission."}
+# Error-envelope strings are wrapped in ``gettext_lazy`` (#73) so a non-English
+# admin gets localized envelopes. ``JsonResponse``'s ``DjangoJSONEncoder``
+# resolves the lazy proxy at serialization time against the request-active
+# locale (activated by Django's ``LocaleMiddleware`` — see README/SECURITY).
+# The machine-readable ``code`` stays a plain ASCII string (never translated).
+_FORBIDDEN_BODY: Final[dict[str, dict[str, Any]]] = {
+    "error": {"code": "forbidden", "message": _("You do not have permission.")}
 }
 
-_SESSION_EXPIRED_BODY: Final[dict[str, dict[str, str]]] = {
+_SESSION_EXPIRED_BODY: Final[dict[str, dict[str, Any]]] = {
     "error": {
         "code": "session_expired",
-        "message": "Your session has expired. Please sign in again.",
+        "message": _("Your session has expired. Please sign in again."),
     }
 }
 
@@ -124,8 +181,14 @@ def forbidden_response(request: HttpRequest | None = None) -> HttpResponse:
     caller-level choice and not encoded here.
     """
     body = _FORBIDDEN_BODY
+    decision = "forbidden"
     if request is not None and is_session_expired(request):
         body = _SESSION_EXPIRED_BODY
+        decision = "session_expired"
+    # Structured security log at the denial boundary (#67). Best-effort:
+    # observability must never turn a 403 into a 500.
+    with contextlib.suppress(Exception):  # pragma: no cover — logging must not break the response
+        log_security_event(request, decision)
     response = JsonResponse(body, status=403)
     # Discourage caching of a permission decision.
     response["Cache-Control"] = "no-store"

@@ -233,6 +233,8 @@ def test_get_method_not_allowed(superuser_client: Client) -> None:
     target = _make_target()
     response = superuser_client.get(_url(target.pk))
     assert response.status_code == 405
+    # 405 uses the canonical JSON envelope (#65), not Django's bare body.
+    assert response.json()["error"]["code"] == "method_not_allowed"
 
 
 # --------------------------------------------------------------------------- #

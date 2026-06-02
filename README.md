@@ -117,8 +117,8 @@ That's it. Your admin is now also a JSON API at `/admin-api/api/v1/...`.
 | `GET`   | `/api/v1/<app>/<model>/<pk>/`                  | Detail (read view as the HTML admin renders it)           |
 | `PATCH` | `/api/v1/<app>/<model>/<pk>/`                  | Update                                                    |
 | `DELETE`| `/api/v1/<app>/<model>/<pk>/`                  | Destroy (with `LogEntry`)                                 |
-| `POST`  | `/api/v1/<app>/<model>/bulk-update/`           | Bulk patch                                                |
-| `POST`  | `/api/v1/<app>/<model>/delete-preview/`        | Cascade preview (like the HTML admin's confirm page)      |
+| `PATCH` | `/api/v1/<app>/<model>/bulk/`                  | Bulk patch                                                |
+| `GET`   | `/api/v1/<app>/<model>/<pk>/delete-preview/`   | Cascade preview (like the HTML admin's confirm page)      |
 | `GET`   | `/api/v1/<app>/<model>/autocomplete/?q=…`      | `ModelAdmin.autocomplete_fields` source                   |
 | `POST`  | `/api/v1/<app>/<model>/actions/<name>/`        | Run a `ModelAdmin` action; one endpoint serves both shapes (batch / detail) — the runner inspects the callable's signature and either passes the user-narrowed `QuerySet` or `str(pk)` for the single selected row |
 | `GET`   | `/api/v1/<app>/<model>/<pk>/history/`          | The `LogEntry` history for one object                     |
@@ -128,6 +128,44 @@ That's it. Your admin is now also a JSON API at `/admin-api/api/v1/...`.
 | `POST`  | `/api/v1/<app>/<model>/<pk>/password/`         | JSON mirror of `UserAdmin`'s password-change page (`AdminPasswordChangeForm` + `AUTH_PASSWORD_VALIDATORS` + `set_password`); 404 unless the model's admin declares `change_password_form`; gated by `has_change_permission` |
 
 Every endpoint enforces the same permission gates as the HTML admin.
+
+---
+
+## 🧩 ModelAdmin carry-through status
+
+The package duck-types `ModelAdmin` and surfaces a wide slice of its
+configuration on the wire. This table is the honest at-a-glance answer to
+"will my gnarly admin just work?" — **Honored** (carried through and
+tested), **Partial** (surfaced with a documented caveat), **Not yet**
+(no signal emitted today).
+
+| ModelAdmin hook | Status | Notes |
+| --------------- | ------ | ----- |
+| `list_display` (+ `@admin.display` callables) | Honored | Methods resolve via `lookup_field`. |
+| `list_display_links` | Honored | Top-level `list_display_links` array on the changelist; `None` → `[]`. |
+| `list_filter` (Simple / boolean / choice / FK / date / related-path) | Honored | FK filters carry `autocomplete:true`. |
+| `search_fields` / `search_help_text` / `get_search_results` | Honored | |
+| `get_ordering` / `get_sortable_by` / `ordering` | Honored | |
+| `date_hierarchy` | Honored | |
+| `list_editable` (bulk save) | Honored | Via `PATCH .../bulk/`. |
+| `list_select_related` / `get_queryset` | Honored | N+1 guard on list **and** inlines. |
+| `actions` (batch + detail) | Honored | One runner serves both shapes. |
+| `fieldsets` / `get_fieldsets` (+ classes / description) | Honored | |
+| `get_readonly_fields` | Honored | |
+| `inlines` (Stacked / Tabular) — read | Honored | FK/M2M columns select_related / prefetch_related. |
+| `raw_id_fields` / `radio_fields` / `filter_horizontal` / `filter_vertical` | Honored | Emitted as `widget` hints. |
+| `formfield_overrides` | Honored | Reconciled into `widget` / `type`. |
+| `save_as` / `save_on_top` / save-flow buttons | Honored | |
+| `empty_value_display` / `message_user` / `view_on_site` | Honored | |
+| `show_full_result_count` / `list_max_show_all` | Honored | |
+| custom `AdminSite` / `get_app_list` | Honored | Via `DJANGO_ADMIN_REST_API["ADMIN_SITE"]`. |
+| `change_password_form` (UserAdmin) | Honored | `…/<pk>/password/`. |
+| `prepopulated_fields` | Honored | `{target:[sources]}` on the add form-spec / `/add/` schema. |
+| `autocomplete_fields` | Partial | Endpoint exists; a `widget:"autocomplete"` hint is emitted **only** when the target admin declares `search_fields`. Authorization is target-`has_view_permission` based (slightly broader than Django's source-relation check). |
+| `change_form_template` / `add_form_template`, overridden `change_view` / `add_view` | Partial | Surfaced via the `legacy-iframe` renderer (embed the legacy page); not rebuilt as JSON. Overrides must stay GET-idempotent (see SECURITY.md). |
+| date `list_filter` range UX | Partial | Surfaced as `{type:"date"}` with exact-match; range UI deferred. |
+| `get_urls` custom views | Not yet | No generic passthrough (by design — use the SPA's own routes or an iframe). |
+| Generic inlines (`GenericTabularInline` / `GenericStackedInline`) | Not yet | Not specifically handled. |
 
 ---
 
@@ -329,6 +367,35 @@ Django's URL resolver hits the ratelimited dispatcher first.)
 
 Whichever you pick, deploy it on day one — there is no reason to wait
 for the first brute-force attempt.
+
+### Internationalization (i18n)
+
+The package emits its UI / error-envelope strings ("Not found.", "You do
+not have permission.", "Invalid credentials…", etc.) through
+`gettext_lazy`, and model / field / choice labels are already
+`str()`-coerced lazy proxies. They resolve to the **request-active
+locale** — so to get localized envelopes and `verbose_name`s, enable
+Django's `LocaleMiddleware` exactly as the HTML admin requires:
+
+```python
+# settings.py
+USE_I18N = True
+MIDDLEWARE = [
+    # ...
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",   # ← activates request locale
+    "django.middleware.common.CommonMiddleware",
+    # ...
+]
+```
+
+`LocaleMiddleware` must sit **after** `SessionMiddleware` and **before**
+`CommonMiddleware` (Django's documented ordering). Without it, requests
+fall back to `LANGUAGE_CODE` and you get English envelopes / labels — the
+same behavior the HTML admin exhibits without the middleware. The package
+ships no `.po` catalogs of its own; the lazy wrapping means a project that
+adds translations for these source strings (or relies on Django's own
+translated label strings) gets them for free.
 
 ---
 

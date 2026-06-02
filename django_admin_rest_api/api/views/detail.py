@@ -35,7 +35,6 @@ from django.forms.widgets import TextInput
 from django.http import HttpRequest
 from django.http import HttpResponse
 from django.http import JsonResponse
-from django.views.generic import View
 
 from django_admin_rest_api.api.actions_meta import actions_payload
 from django_admin_rest_api.api.inlines import inlines_payload
@@ -53,13 +52,14 @@ from django_admin_rest_api.api.serializers import label_for
 from django_admin_rest_api.api.serializers import safe_get_field
 from django_admin_rest_api.api.serializers import serialize_fk_value
 from django_admin_rest_api.api.serializers import serialize_value
+from django_admin_rest_api.api.views.base import BaseAPIView
 from django_admin_rest_api.api.writes import load_object_or_none
 from django_admin_rest_api.api.writes import not_found_response
 
 logger = logging.getLogger(__name__)
 
 
-class DetailView(View):
+class DetailView(BaseAPIView):
     """``GET /api/v1/<app_label>/<model_name>/<pk>/`` — single object."""
 
     http_method_names = ["get"]
@@ -318,6 +318,39 @@ def _fields_payload(
     return out
 
 
+def _is_autocomplete_field(
+    model_admin: ModelAdmin,
+    model: type[Model],
+    name: str,
+    request: HttpRequest,
+    admin_site: Any,
+) -> bool:
+    """Whether ``name`` should render as an autocomplete typeahead (#72).
+
+    True iff the field is a relation listed in
+    ``ModelAdmin.get_autocomplete_fields(request)`` AND the related model's
+    admin (on this site) declares ``search_fields`` — Django's own
+    requirement for the autocomplete endpoint to return results. Without a
+    searchable target admin the typeahead has nothing to query, so the
+    client should fall back to a plain select. Best-effort: any resolution
+    error degrades to ``False`` (no hint).
+    """
+    try:
+        autocomplete = set(model_admin.get_autocomplete_fields(request) or ())
+    except Exception:  # pragma: no cover — admin author error
+        return False
+    if name not in autocomplete:
+        return False
+    field = safe_get_field(model, name)
+    related_model = getattr(getattr(field, "remote_field", None), "model", None)
+    if related_model is None:
+        return False
+    target_admin = getattr(admin_site, "_registry", {}).get(related_model)
+    if target_admin is None:
+        return False
+    return bool(getattr(target_admin, "search_fields", None))
+
+
 def _descriptor_for(
     *,
     model: type[Model],
@@ -415,6 +448,15 @@ def _descriptor_for(
         descriptor["widget"] = "shuttle_h"
     elif name in (getattr(model_admin, "filter_vertical", None) or ()):
         descriptor["widget"] = "shuttle_v"
+    # autocomplete_fields (#72): a high-cardinality FK/M2M the admin lists in
+    # ``autocomplete_fields`` should render as a typeahead backed by the
+    # ``/<app>/<model>/autocomplete/`` endpoint, not a full select. Only hint
+    # it when the *target* admin actually declares ``search_fields`` (Django's
+    # own requirement for autocomplete to work) — otherwise the typeahead has
+    # nothing to search and the client should fall back to a plain select.
+    # ``elif`` so the earlier raw_id / shuttle wins if a field is in both.
+    elif _is_autocomplete_field(model_admin, model, name, request, admin_site):
+        descriptor["widget"] = "autocomplete"
     # formfield_overrides (#446): the bound form field's widget already
     # reflects the admin's ``formfield_overrides`` /
     # ``formfield_for_dbfield`` — Django applied them in ``get_form``.

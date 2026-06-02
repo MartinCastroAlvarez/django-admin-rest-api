@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-06-02
+
+### Added
+- **Structured security logging** on a dedicated
+  `django_admin_rest_api.security` logger: one record per 403 permission
+  denial (`api/permissions.forbidden_response`) and per failed login
+  (`api/views/auth`), carrying `{user, path, method, decision}` — never the
+  password, no request-body PII. Only denials are logged. Documented in
+  `SECURITY.md` with a `LOGGING` snippet (#67).
+- **`MAX_BULK_UPDATES` setting** single-sourcing the `PATCH .../bulk/` batch
+  cap (previously a hardcoded `200`). Defaults to `MAX_PAGE_SIZE` when unset
+  so a "save the whole page" workflow fits, and is independently tunable;
+  `0` disables it. Mirrors `MAX_ACTION_PKS` (#69).
+- **`prepopulated_fields` on the add form-spec** (`…/add/form-spec/`), the
+  same `{target:[sources]}` map the `/add/` schema already emits, so a
+  client rendering from the form-spec can slugify-on-keystroke (#72).
+- **`widget:"autocomplete"` field hint** on the detail / create-form field
+  descriptors when a field is in `get_autocomplete_fields(request)` **and**
+  the target admin declares `search_fields` (#72).
+- **ModelAdmin carry-through status table** in the README (Honored /
+  Partial / Not yet) so integrators can see at a glance what is supported
+  and where the gaps are (#66).
+- **README internationalization section** documenting that `LocaleMiddleware`
+  drives request-locale activation for envelopes and `verbose_name`s (#73).
+- **Doc verb/path drift guard**: `tests/test_doc_references.py` now resolves
+  every documented `METHOD /path` row (README + api-contract) against the
+  real `api/urls.py` route table, so a wrong verb or path fails CI (#64).
+- **Inline query-count regression test** for the inline N+1 guard (#71).
+
+### Changed
+- **All API views now subclass a shared `BaseAPIView`** so behavior (notably
+  the 405 envelope below) is uniform across the view layer (#65).
+- **Emitted UI / error-envelope strings are wrapped in `gettext_lazy`**
+  ("Not found.", "You do not have permission.", session-expired, invalid
+  credentials, conflict, validation / bad-request defaults) and resolve to
+  the request-active locale; machine-readable `code` values stay ASCII (#73).
+- **Inline child rows apply `select_related` (forward FK / O2O) and
+  `prefetch_related` (M2M)** before iterating, mirroring the list view's
+  N+1 guard (#71).
+
+### Fixed
+- **405 responses now use the canonical JSON envelope**
+  `{"error":{"code":"method_not_allowed", …}}` with the `Allow` header
+  preserved, instead of Django's bare `HttpResponseNotAllowed` HTML body —
+  the `method_not_allowed` code the OpenAPI schema advertises is now
+  actually emitted (#65).
+- **README endpoints table**: `bulk` is `PATCH .../bulk/` (was
+  `POST .../bulk-update/`); `delete-preview` is
+  `GET .../<pk>/delete-preview/` (was `POST`, missing `<pk>`). The same
+  delete-preview error in `docs/api-contract.md` §6 is corrected, and §5.5's
+  heading now reads `PATCH` (#64).
+- **`docs/api-contract.md` §3.2**: documented a top-level `list_display_links`
+  array (resolved from `get_list_display_links`, `None` → `[]`) instead of a
+  nonexistent per-column `links` boolean (react #666).
+
+### Security
+- Added the `django_admin_rest_api.security` denial / failed-login logging
+  channel (#67).
+- Documented (SECURITY.md + code comment) that an overridden
+  `change_view` / `add_view` is invoked on a GET by the form-spec
+  introspection probe and must stay GET-idempotent — Django's own contract;
+  doc/comment only, no behavior change (#70).
+- Brute-force throttling on the JSON login endpoint (#68) is **not** shipped
+  in-package (the package is a thin layer over django-admin, not a throttle
+  library); the README "rate-limit the auth + password endpoints" section
+  gives worked `django-axes` / `django-ratelimit` configs (incl. the
+  `AUTHENTICATION_BACKENDS` note) pointed at `/api/v1/login/`.
+
 ## [1.5.0] — 2026-06-02
 
 ### Added
