@@ -277,22 +277,71 @@ Normal response (`renderer: "form-spec"`):
   add page. (Same shape the add-form schema endpoint `/add/` already emits.)
   Absent / `{}` on the change form-spec.
 
-Escape hatch — when the form can't be faithfully rendered from JSON, the
-endpoint returns a pointer to embed the legacy admin page in an iframe for
-that one view instead of silently dropping the customisation. Two cases
-trigger it:
+#### html-fragment — server-rendered custom forms (#75)
+
+When the form **can't** be faithfully rebuilt from JSON, the endpoint renders
+the integrator's own template server-side and hands the SPA the resulting HTML
+to inject in place (no iframe — this avoids every `X-Frame-Options` /
+`SameSite` / cookie-bridge failure mode). Two cases trigger it:
 
 1. the ModelAdmin sets `change_form_template` / `add_form_template`; or
 2. the ModelAdmin overrides `change_view` / `add_view` and that override
    renders a non-standard template for *this* request (e.g. a `?run_custom=1`
    branch returning a hand-rolled `render(...)`). The resolver probes the
-   overridden view and falls back to the iframe when the response is not the
-   stock `admin/change_form.html`. The querystring is preserved on
-   `legacy_url`.
+   overridden view and switches to html-fragment when the response is not the
+   stock `admin/change_form.html`.
+
+The resolver invokes the real view with the SPA caller's authenticated request
+(carrying its querystring), strips the surrounding admin chrome — keeping only
+the inside of `{% block content %}` (i.e. the contents of `<div id="content">`;
+`<html>`, `<head>`, `<header id="header">`, `#nav-sidebar`, `#footer` are
+dropped) — and preserves any `<script>` / `<style>` the template emits **inside**
+the content block verbatim (they're part of the integrator's form contract).
 
 ```json
-{"renderer": "legacy-iframe", "legacy_url": "/admin/auth/group/1/change/?…"}
+{
+  "renderer": "html-fragment",
+  "html": "<form …>…</form>",
+  "csrf_token": "…",
+  "submit_url": "/admin/jobs/job/1/change/?run_custom=1",
+  "method": "POST",
+  "messages": [{"level": "success", "text": "Queued …"}]
+}
 ```
+
+- `html` — the content-block HTML; the SPA injects it as trusted HTML (it is
+  the integrator's own server-rendered template — same trust boundary as their
+  legacy admin; see `SECURITY.md`).
+- `csrf_token` — valid for the same session, so the SPA can re-submit.
+- `submit_url` — the legacy admin change/add URL (+ the original querystring)
+  the SPA POSTs the form back to.
+- `messages` — Django `messages.success(…)` / `messages.error(…)` captured off
+  the request, as `{level, text}` (no browser session round-trip), for the SPA
+  to toast.
+
+#### POST round-trip — `POST /api/v1/<app>/<model>/<pk>/change/?<qs>`
+
+The SPA submits the html-fragment's form back to the companion `change` route
+(querystring forwarded). It re-runs the legacy `change_view` server-side with
+the forwarded POST data and returns either:
+
+- another **html-fragment** when the view re-renders (e.g. validation errors —
+  including the legacy Post/Redirect/Get-to-self idiom, which the resolver
+  follows server-side and re-renders); or
+- a **redirect** when the view returns an `HttpResponseRedirect` *elsewhere*
+  (the success path). The legacy target (e.g.
+  `/admin/jobs/job/1/change/`) is rewritten onto the configurable SPA prefix —
+  the `SPA_URL_PREFIX` setting, default `/admin2/` — so the SPA navigates
+  within its own shell:
+
+```json
+{"renderer": "redirect", "to": "/admin2/jobs/job/1/change/",
+ "messages": [{"level": "success", "text": "Queued step-1 → step-2"}]}
+```
+
+Gates: same staff + `AdminSite.has_permission` + registry resolution as the
+GET form-spec; the POST route additionally requires per-object
+`has_change_permission` (a POST mutates). CSRF is the consumer's middleware.
 
 ---
 

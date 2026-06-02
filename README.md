@@ -162,7 +162,7 @@ tested), **Partial** (surfaced with a documented caveat), **Not yet**
 | `change_password_form` (UserAdmin) | Honored | `…/<pk>/password/`. |
 | `prepopulated_fields` | Honored | `{target:[sources]}` on the add form-spec / `/add/` schema. |
 | `autocomplete_fields` | Partial | Endpoint exists; a `widget:"autocomplete"` hint is emitted **only** when the target admin declares `search_fields`. Authorization is target-`has_view_permission` based (slightly broader than Django's source-relation check). |
-| `change_form_template` / `add_form_template`, overridden `change_view` / `add_view` | Partial | Surfaced via the `legacy-iframe` renderer (embed the legacy page); not rebuilt as JSON. Overrides must stay GET-idempotent (see SECURITY.md). |
+| `change_form_template` / `add_form_template`, overridden `change_view` / `add_view` | Honored | Rendered server-side and returned as an `html-fragment` (admin chrome stripped; inline `<script>`/`<style>` preserved) for the SPA to inject in place — no iframe. POST round-trips through `…/<pk>/change/` (redirect / re-render + captured messages). Overrides must stay GET-idempotent (see SECURITY.md). |
 | date `list_filter` range UX | Partial | Surfaced as `{type:"date"}` with exact-match; range UI deferred. |
 | `get_urls` custom views | Not yet | No generic passthrough (by design — use the SPA's own routes or an iframe). |
 | Generic inlines (`GenericTabularInline` / `GenericStackedInline`) | Not yet | Not specifically handled. |

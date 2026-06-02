@@ -31,6 +31,8 @@ Wire contract: ``docs/api-contract.md`` §4.1.
 from __future__ import annotations
 
 import logging
+import re
+from html.parser import HTMLParser
 from typing import Any
 from typing import Final
 
@@ -38,10 +40,14 @@ from django.contrib.admin.options import ModelAdmin
 from django.db.models import Model
 from django.forms import Widget
 from django.http import HttpRequest
+from django.http import HttpResponse
+from django.http.response import HttpResponseRedirectBase
+from django.middleware.csrf import get_token
 from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch
 from django.urls import reverse
 
+from django_admin_rest_api import conf
 from django_admin_rest_api.api.views.detail import _descriptor_for
 from django_admin_rest_api.api.views.detail import _fieldsets_payload
 from django_admin_rest_api.api.views.detail import _visible_field_names
@@ -232,7 +238,8 @@ def _renders_custom_template(
     ``TemplateResponse`` carrying
     ``admin/change_form.html`` is the stock form (→ render the JSON spec);
     anything else — a different template, a ``render()`` ``HttpResponse``, a
-    redirect — means the SPA can't reproduce it, so fall back to the iframe.
+    redirect — means the SPA can't reproduce it from the JSON spec, so we
+    render it server-side and return an ``html-fragment`` (#75).
 
     On any probe error the safe default is ``False`` (render the JSON spec),
     matching the conservative fall-through used elsewhere in this module.
@@ -272,56 +279,359 @@ def _renders_custom_template(
     return True
 
 
-def _legacy_renderer(
+# --------------------------------------------------------------------------- #
+# Admin-chrome stripping                                                       #
+# --------------------------------------------------------------------------- #
+# Django's ``admin/base.html`` wraps ``{% block content %}`` (plus the default
+# ``content_title`` / ``content_subtitle`` h1/h2) in ``<div id="content">``. We
+# extract that div's inner HTML — everything else (``<html>``, ``<head>``,
+# ``<header id="header">``, ``#nav-sidebar``, ``#footer``) is chrome the SPA
+# already renders, so it's dropped. ``<script>`` / ``<style>`` the integrator's
+# template emits *inside* the content block live within this div, so they
+# survive verbatim (they're part of the form contract — #75).
+_CONTENT_DIV_ID: Final[str] = "content"
+
+
+class _ContentBlockExtractor(HTMLParser):
+    """Capture the inner HTML of ``<div id="content">`` from a rendered page.
+
+    Stdlib-only (no bs4 / lxml dependency). Depth-counts nested ``<div>``s so
+    the matching close tag is found even when the content block contains its
+    own divs. ``convert_charrefs=False`` keeps entity references byte-faithful
+    so an integrator's ``&amp;`` / ``&lt;`` in the fragment is preserved.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self._capturing = False
+        self._depth = 0
+        self._parts: list[str] = []
+        self.done = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.done:
+            return
+        if not self._capturing:
+            if tag == "div" and dict(attrs).get("id") == _CONTENT_DIV_ID:
+                self._capturing = True
+                self._depth = 1
+            return
+        if tag == "div":
+            self._depth += 1
+        self._parts.append(self.get_starttag_text() or f"<{tag}>")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        # Void / self-closing tags (``<input .../>``, ``<img .../>``).
+        if self._capturing and not self.done:
+            self._parts.append(self.get_starttag_text() or f"<{tag}/>")
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._capturing or self.done:
+            return
+        if tag == "div":
+            self._depth -= 1
+            if self._depth == 0:
+                self.done = True
+                return
+        self._parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if self._capturing and not self.done:
+            self._parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        if self._capturing and not self.done:
+            self._parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        if self._capturing and not self.done:
+            self._parts.append(f"&#{name};")
+
+    def handle_comment(self, data: str) -> None:
+        if self._capturing and not self.done:
+            self._parts.append(f"<!--{data}-->")
+
+    @property
+    def html(self) -> str:
+        return "".join(self._parts).strip()
+
+
+def strip_admin_chrome(rendered: str) -> str:
+    """Return only the inside of ``<div id="content">`` from a rendered admin
+    page, with surrounding chrome removed and the integrator's inline
+    ``<script>`` / ``<style>`` preserved verbatim.
+
+    Falls back to the full body (minus a leading doctype/html) if the content
+    div can't be located — better to over-include than to drop the form.
+    """
+    parser = _ContentBlockExtractor()
+    parser.feed(rendered)
+    parser.close()
+    fragment = parser.html
+    if fragment:
+        return fragment
+    # Defensive fallback: no ``#content`` div found (a wildly non-stock base).
+    # Strip the doctype + outer html/head so the SPA still gets a body-ish
+    # fragment rather than a full document.
+    logger.warning("html-fragment: no <div id=content> found; returning body fallback")
+    body = re.search(r"<body[^>]*>(.*)</body>", rendered, re.IGNORECASE | re.DOTALL)
+    return (body.group(1) if body else rendered).strip()
+
+
+# --------------------------------------------------------------------------- #
+# Django messages capture                                                      #
+# --------------------------------------------------------------------------- #
+def capture_messages(request: HttpRequest) -> list[dict[str, str]]:
+    """Drain the request's Django ``messages`` into ``[{level, text}]``.
+
+    The html-fragment round-trip has no browser session redirect to flush the
+    message storage, so we read it directly off the synthetic/SPA request and
+    surface it in the JSON payload for the SPA to toast (#75). ``get_messages``
+    marks the storage used, so each message is returned exactly once.
+    """
+    from django.contrib.messages import get_messages
+
+    out: list[dict[str, str]] = []
+    try:
+        for message in get_messages(request):
+            out.append({"level": message.level_tag or "info", "text": str(message)})
+    except Exception:  # noqa: BLE001 — messages framework not configured / no storage
+        logger.warning("html-fragment: could not read messages storage", exc_info=True)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Redirect → SPA URL mapping                                                   #
+# --------------------------------------------------------------------------- #
+_LEGACY_ADMIN_PREFIX_RE: Final[re.Pattern[str]] = re.compile(r"^/[^/]+/")
+
+
+def map_redirect_to_spa(location: str) -> str:
+    """Rewrite a legacy admin redirect target onto the configured SPA prefix.
+
+    A legacy change_view returns ``HttpResponseRedirect`` to e.g.
+    ``/admin/jobs/job/1/change/``; the SPA navigates within its own shell, so
+    we swap the leading ``/<admin-mount>/`` segment for ``conf.SPA_URL_PREFIX``
+    (default ``/admin2/``) → ``/admin2/jobs/job/1/change/`` (#75). Absolute
+    (``http://``) or non-admin targets pass through unchanged.
+    """
+    spa_prefix = conf.SPA_URL_PREFIX
+    if not spa_prefix.endswith("/"):
+        spa_prefix = f"{spa_prefix}/"
+    if not location.startswith("/"):
+        return location
+    # Replace only the first path segment (the admin mount, e.g. ``/admin/``).
+    return _LEGACY_ADMIN_PREFIX_RE.sub(spa_prefix, location, count=1)
+
+
+# --------------------------------------------------------------------------- #
+# html-fragment renderer                                                       #
+# --------------------------------------------------------------------------- #
+def _resolve_legacy_response(
     model_admin: ModelAdmin,
     request: HttpRequest,
-    app_label: str,
-    model_name: str,
+    obj: Any,
+    *,
+    change: bool,
+) -> HttpResponse:
+    """Invoke the ModelAdmin's real change/add view with the SPA caller's
+    request (auth + querystring + POST data already on it) and return the
+    response. The caller decides whether to render it as an html-fragment.
+    """
+    if change:
+        return model_admin.change_view(request, str(obj.pk))
+    return model_admin.add_view(request)
+
+
+def _render_response_html(response: HttpResponse) -> str:
+    """Return the rendered HTML body of a (possibly lazy) admin response."""
+    if isinstance(response, TemplateResponse) and not response.is_rendered:
+        response.render()
+    return response.content.decode(response.charset or "utf-8")
+
+
+def _submit_url(model_admin: ModelAdmin, request: HttpRequest, obj: Any, *, change: bool) -> str:
+    """The legacy admin change/add URL (+ original querystring) the SPA POSTs
+    back to. This is the ``action`` target the html-fragment's form wires to.
+    """
+    site_name = getattr(getattr(model_admin, "admin_site", None), "name", "admin")
+    app_label = model_admin.model._meta.app_label
+    model_name = str(model_admin.model._meta.model_name)
+    view = "change" if change else "add"
+    args = [obj.pk] if change and obj is not None else []
+    url = reverse(f"{site_name}:{app_label}_{model_name}_{view}", args=args)
+    query = request.META.get("QUERY_STRING", "")
+    return f"{url}?{query}" if query else url
+
+
+def _html_fragment_payload(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    response: HttpResponse,
+    obj: Any,
+    *,
+    change: bool,
+) -> dict[str, Any]:
+    """Build the ``html-fragment`` payload from a rendered admin response."""
+    html = strip_admin_chrome(_render_response_html(response))
+    return {
+        "renderer": "html-fragment",
+        "html": html,
+        "csrf_token": get_token(request),
+        "submit_url": _submit_url(model_admin, request, obj, change=change),
+        "method": "POST",
+        "messages": capture_messages(request),
+    }
+
+
+def _custom_renderer(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
     obj: Any,
     *,
     change: bool,
 ) -> dict[str, Any] | None:
-    """Return a ``legacy-iframe`` renderer payload, or ``None``.
+    """Return an ``html-fragment`` payload when the ModelAdmin renders a custom
+    template, or ``None`` when the stock JSON form-spec applies (#75).
 
-    Two cases route to the iframe escape hatch, because in neither can the
-    SPA faithfully rebuild the form from the JSON spec:
+    Two cases route to server-side rendering, because in neither can the SPA
+    faithfully rebuild the form from the JSON spec:
 
     1. The ModelAdmin sets ``change_form_template`` (change view) or
        ``add_form_template`` (add view) — a declared custom template.
     2. The ModelAdmin overrides ``change_view`` / ``add_view`` and that
        override renders a non-standard template for *this* request (e.g. a
-       ``?run_custom=1`` branch that returns a custom dual-listbox page).
+       ``?run_custom=1`` branch returning a hand-rolled dual-listbox page).
 
-    Rather than silently drop the integrator's customisation (README #624),
-    the spec tells the client to embed the legacy admin change/add page in an
-    iframe for *that one view*. The rest of the SPA shell is untouched.
+    Rather than drop the integrator's customisation, we invoke the real view
+    server-side (carrying the SPA caller's auth + querystring), strip the admin
+    chrome, and hand the SPA the content-block HTML to inject in-place — no
+    iframe, no X-Frame-Options / SameSite failure mode. The rest of the SPA
+    shell is untouched.
 
-    Returns ``None`` (→ render the normal spec) when neither case applies, or
-    when the legacy admin URL can't be reversed (the integrator may have
-    unmounted ``django.contrib.admin`` entirely — in that case there's
-    nothing to iframe, so fall through to the JSON spec).
+    Returns ``None`` (→ render the JSON spec) when neither case applies, or
+    when reversing the legacy admin URL fails (the integrator may have
+    unmounted ``django.contrib.admin`` — nothing to render server-side).
     """
     template = getattr(model_admin, "change_form_template" if change else "add_form_template", None)
     if not template and not _renders_custom_template(model_admin, request, obj, change=change):
         return None
-    site_name = getattr(getattr(model_admin, "admin_site", None), "name", "admin")
-    view = "change" if change else "add"
-    args = [obj.pk] if change and obj is not None else []
     try:
-        legacy_url = reverse(f"{site_name}:{app_label}_{model_name}_{view}", args=args)
+        response = _resolve_legacy_response(model_admin, request, obj, change=change)
+        payload = _html_fragment_payload(model_admin, request, response, obj, change=change)
     except NoReverseMatch:
         logger.warning(
-            "form-spec legacy-iframe fallback: cannot reverse %s admin URL for %s.%s; "
-            "rendering JSON spec instead",
-            view,
-            app_label,
-            model_name,
+            "html-fragment: cannot reverse %s admin URL for %s; rendering JSON spec instead",
+            "change" if change else "add",
+            type(model_admin).__qualname__,
         )
         return None
+    except Exception:  # noqa: BLE001 — a view that errs falls back to the JSON spec
+        logger.warning(
+            "html-fragment: %s.%s_view raised while rendering; rendering JSON spec instead",
+            type(model_admin).__qualname__,
+            "change" if change else "add",
+            exc_info=True,
+        )
+        return None
+    return payload
+
+
+def render_change_post(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    obj: Any,
+) -> dict[str, Any]:
+    """Re-run the legacy change_view server-side for a POST round-trip (#75).
+
+    The SPA POSTs the html-fragment's form back to
+    ``/api/v1/<app>/<model>/<pk>/change/?<qs>``; this forwards the POST data +
+    querystring (already on ``request``) into the real ``change_view`` and maps
+    its response to one of two payloads:
+
+    - ``{"renderer": "redirect", "to": "<SPA url>", "messages": […]}`` when the
+      view returns an ``HttpResponseRedirect`` (success path), the legacy
+      target rewritten onto the SPA prefix; or
+    - another ``html-fragment`` when the view re-renders (e.g. validation
+      errors), so the SPA can re-display the form.
+
+    Django messages set by the view are captured into the payload either way.
+
+    A redirect *back to the same change page* is the legacy
+    Post/Redirect/Get-to-self idiom a view uses to re-display the form with a
+    flash error (the fixture's empty-selection branch does
+    ``redirect(request.get_full_path())``). We don't bounce that to the SPA —
+    we follow it server-side, re-render the form, and return an html-fragment
+    carrying the captured messages, so the SPA re-displays the form with the
+    error toast. A redirect *elsewhere* (the success path) becomes a redirect
+    payload mapped onto the SPA prefix.
+    """
+    response = _resolve_legacy_response(model_admin, request, obj, change=True)
+    # Drain messages off the POST request now — a self-redirect re-render uses
+    # a fresh synthetic GET whose storage wouldn't carry them.
+    captured = capture_messages(request)
+    if isinstance(response, HttpResponseRedirectBase):
+        location = response["Location"]
+        if _is_self_redirect(location, request):
+            return _rerender_after_post(model_admin, request, obj, messages=captured)
+        return {
+            "renderer": "redirect",
+            "to": map_redirect_to_spa(location),
+            "messages": captured,
+        }
+    payload = _html_fragment_payload(model_admin, request, response, obj, change=True)
+    payload["messages"] = captured
+    return payload
+
+
+def _is_self_redirect(location: str, request: HttpRequest) -> bool:
+    """True if ``location`` points back to the current request's own path —
+    the PRG-to-self idiom a view uses to re-display the form with a flash."""
+    from urllib.parse import urlparse
+
+    return urlparse(location).path == request.path
+
+
+def _rerender_after_post(
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    obj: Any,
+    *,
+    messages: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Re-render the change form via a synthetic GET (carrying the POST
+    request's auth + querystring) and return an html-fragment whose
+    ``messages`` are the ones the POST set (passed in ``messages``)."""
+    get_request = _synthetic_get(request)
+    response = _resolve_legacy_response(model_admin, get_request, obj, change=True)
+    payload = _html_fragment_payload(model_admin, get_request, response, obj, change=True)
+    payload["messages"] = messages
+    return payload
+
+
+def _synthetic_get(request: HttpRequest) -> HttpRequest:
+    """Build a GET request mirroring ``request``'s auth/session/querystring.
+
+    Reuses the SPA caller's identity (``user``/``session``) and original
+    querystring so a request-aware view resolves the same ``?run_custom=1``
+    branch. No security-bypass flags are copied — the synthetic request is a
+    plain GET gated by the same permission checks the POST already passed.
+    """
+    from django.contrib.messages.storage.fallback import FallbackStorage
+    from django.test import RequestFactory
+
+    factory = RequestFactory()
     query = request.META.get("QUERY_STRING", "")
-    if query:
-        legacy_url = f"{legacy_url}?{query}"
-    return {"renderer": "legacy-iframe", "legacy_url": legacy_url}
+    path = request.path if not query else f"{request.path}?{query}"
+    get_request = factory.get(path)
+    get_request.user = request.user
+    if hasattr(request, "session"):
+        get_request.session = request.session
+    get_request.COOKIES = request.COOKIES
+    # Fresh message storage so the re-render's template can read messages
+    # without error (the captured POST messages are attached to the payload).
+    get_request._messages = FallbackStorage(get_request)  # type: ignore[attr-defined]
+    return get_request
 
 
 # --------------------------------------------------------------------------- #
@@ -348,22 +658,19 @@ def build_form_spec(
       variant}`` — where ``fields[name]`` carries ``{label, help_text,
       required, readonly, type, widget: {kind, attrs, …}, initial,
       choices, errors}``; or
-    - the escape hatch ``{renderer: "legacy-iframe", legacy_url}`` when the
-      admin overrides the change/add form template.
+    - the server-rendered ``{renderer: "html-fragment", html, csrf_token,
+      submit_url, method, messages}`` when the admin renders a custom
+      template the JSON spec can't reproduce (#75).
 
     No permission gating happens here — the caller (REST view / MCP tool)
     owns the staff + per-object ``has_*_permission`` gates. This function
     assumes access has already been granted.
     """
     change = obj is not None
-    app_label = model._meta.app_label
-    # ``model_name`` is non-None for any concrete registered model; coerce for
-    # the type checker (the stub types it ``str | None``).
-    model_name = str(model._meta.model_name)
 
-    legacy = _legacy_renderer(model_admin, request, app_label, model_name, obj, change=change)
-    if legacy is not None:
-        return legacy
+    custom = _custom_renderer(model_admin, request, obj, change=change)
+    if custom is not None:
+        return custom
 
     visible_names = _visible_field_names(model_admin, request, obj)
     readonly = set(model_admin.get_readonly_fields(request, obj) or ())

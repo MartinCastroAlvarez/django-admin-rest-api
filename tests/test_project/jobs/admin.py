@@ -9,7 +9,8 @@ works":
 * ``run_with_custom_steps`` action — redirects to ``?run_custom=1``.
 * ``change_view`` — branches on ``request.GET`` to a custom view.
 * ``run_custom_view`` — renders a hand-rolled dual-listbox template
-  (Path B: the JSON form-spec can't reproduce it → ``legacy-iframe``).
+  (Path B: the JSON form-spec can't reproduce it → server-rendered
+  ``html-fragment``, #75).
 """
 
 from __future__ import annotations

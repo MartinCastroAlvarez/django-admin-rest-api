@@ -72,11 +72,11 @@ build:
 
 The form-spec endpoint
 (`GET /api/v1/<app>/<model>/[<pk>|add]/form-spec/`) detects whether a
-`ModelAdmin` renders a custom change/add page so the SPA can fall back to
-an iframe. When — and only when — the admin **overrides** `change_view`
-or `add_view`, the resolver *invokes* that override with the live GET
-request to inspect the template it returns
-(`api/form_spec._renders_custom_template`).
+`ModelAdmin` renders a custom change/add page so it can render that page
+server-side and return it as an `html-fragment` (#75). When — and only
+when — the admin **overrides** `change_view` or `add_view`, the resolver
+*invokes* that override with the live GET request to inspect the template
+it returns (`api/form_spec._renders_custom_template`).
 
 Because the override runs on a GET, it **must stay GET-idempotent**: a GET
 must not mutate state. This is already Django's own contract for those
@@ -85,6 +85,28 @@ override is unaffected. An override that performs a side effect on GET (an
 anti-pattern) would have that side effect triggered by a form-spec read,
 and any exception it raises is swallowed to the JSON-spec fallback. Keep
 `change_view` / `add_view` overrides read-only on GET.
+
+## html-fragment is trusted HTML (#75)
+
+When a `ModelAdmin` renders a custom `change_form_template` / `add_form_template`
+(or an overridden `change_view` / `add_view`), the form-spec endpoint renders
+that template **server-side** and returns its content-block HTML under
+`{"renderer": "html-fragment", "html": "…"}`. The SPA injects this `html`
+**as trusted HTML** (e.g. `dangerouslySetInnerHTML`), including any inline
+`<script>` / `<style>` the template emits inside `{% block content %}` — those
+are preserved verbatim because they are part of the integrator's form contract
+(custom-widget JS/CSS).
+
+This is the **same trust boundary as the integrator's own legacy admin**: the
+HTML is produced by their own server-side template code, not by any
+SPA-supplied or end-user-supplied input, and the endpoint is gated behind the
+**same staff + `AdminSite.has_permission` + per-object permission checks** as
+the rest of form-spec (the POST round-trip additionally requires per-object
+`has_change_permission`). The renderer does **not** sanitise the fragment —
+sanitising would silently break the integrator's widgets — so the security
+property rests on the template being integrator-authored, exactly as it is when
+served by the legacy `/admin/` page. No auth or permission gate is weakened;
+nothing in the html-fragment path bypasses a check the legacy admin enforces.
 
 ## Security logging
 

@@ -30,6 +30,7 @@ from django_admin_rest_api.api.views.create_form import AddFormView
 from django_admin_rest_api.api.views.delete_preview import DeletePreviewView
 from django_admin_rest_api.api.views.destroy import DestroyView
 from django_admin_rest_api.api.views.detail import DetailView
+from django_admin_rest_api.api.views.form_spec import ChangePostView
 from django_admin_rest_api.api.views.form_spec import FormSpecView
 from django_admin_rest_api.api.views.history import HistoryView
 from django_admin_rest_api.api.views.list import ListView
@@ -157,6 +158,15 @@ urlpatterns: list = [
         "<str:app_label>/<str:model_name>/<str:pk>/form-spec/",
         FormSpecView.as_view(),
         name="form_spec",
+    ),
+    # html-fragment POST round-trip (#75) — the SPA submits a server-rendered
+    # custom change form here; re-runs the legacy change_view and returns a
+    # redirect or another html-fragment. Literal ``change`` segment must
+    # precede the ``<pk>`` instance route below so it isn't swallowed.
+    path(
+        "<str:app_label>/<str:model_name>/<str:pk>/change/",
+        ChangePostView.as_view(),
+        name="form_spec_change_post",
     ),
     # History sub-resource (#155) — LogEntry timeline for one object.
     # Must precede the instance pattern so ``/history/`` isn't

@@ -26,8 +26,8 @@ INSTALLED_APPS = [
     "django_admin_rest_api",
     # Test-only app with a FileField model for the upload write path (#241).
     "tests.test_project.uploads",
-    # Test-only app exercising the request-driven custom-view → legacy-iframe
-    # escape hatch (#59 cross-repo fixture).
+    # Test-only app exercising the request-driven custom-view → html-fragment
+    # server-side renderer (#59 / #75 cross-repo fixture).
     "tests.test_project.jobs",
 ]
 

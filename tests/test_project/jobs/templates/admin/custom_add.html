@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Minimal custom add template (#75 test fixture). Exercises the html-fragment
+renderer for a declared ``add_form_template`` override.
+{% endcomment %}
+{% block content %}
+<form method="post" id="custom-add-form">
+  {% csrf_token %}
+  <p>Custom add form.</p>
+  <button type="submit">Add</button>
+</form>
+{% endblock %}
