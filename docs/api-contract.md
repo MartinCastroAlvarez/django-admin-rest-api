@@ -88,6 +88,7 @@ Returns the full app/model tree the request's user may see, plus the user's iden
 - `mount` — the path before `api/v1/`, recovered from `request.path` so the consumer doesn't need to repeat it.
 - `apps[]` — comes from `AdminSite.get_app_list(request)`. Filtered by `ModelAdmin.has_module_permission` + `has_view_permission` (Django's own gates).
 - `actions[]` — see [§3.4](#34-actions-on-the-list--detail--registry-responses) for the descriptor.
+- `custom_views[]` — **optional**, present only when the model's `ModelAdmin.get_urls()` registers changelist-level custom routes (no `object_id` capture). Each entry is `{"name", "label", "url", "level": "changelist"}`; see [§4](#§4-get-apiv1appmodelpk--detail) for the descriptor and the object-level counterpart. Omitted entirely when the admin has no model-wide custom routes.
 
 ---
 
@@ -192,12 +193,21 @@ Single-object descriptor for the change page:
   "inlines": [...],
   "view_on_site_url": null,
   "object_actions": [...],
+  "custom_views": [
+    {
+      "name": "auth_user_download_report",
+      "label": "Download report (CSV)",
+      "url": "/admin/auth/user/1/download-report/",
+      "level": "object"
+    }
+  ],
   "empty_value_display": "-"
 }
 ```
 
 - `password_change.available = true` iff the admin declares `change_password_form` (i.e. `UserAdmin`).
 - `object_actions` shares the shape and source of `actions` on the list response — the consumer renders detail-target actions here. Clicks POST to the same runner URL as the changelist actions.
+- `custom_views[]` — **always present** (`[]` when none). Object-level custom routes the `ModelAdmin` registers via `get_urls()` (their route captures `object_id`), reversed with this object's pk. Each entry is `{"name", "label", "url", "level": "object"}`: `name` is the URL-pattern name (a stable id); `label` is the view's `short_description` if set, else the humanized route-name suffix; `url` is the reversed admin URL. The five stock CRUD routes (`change` / `add` / `changelist` / `delete` / `history`) are excluded, and a route that can't be reversed is skipped. The package does **not** render the consumer's Django template — the SPA links out to the legacy-admin-rendered page. Model-wide (changelist-level) custom views live on the [§2](#§2-get-apiv1registry) registry entry instead.
 - `fields[*].type` is one of the documented kinds: `string`, `integer`, `decimal`, `float`, `boolean`, `date`, `datetime`, `time`, `duration`, `uuid`, `json`, `array`, `range`, `foreign_key`, `many_to_many`, `file`, `email`, `url`, `image`, `unsupported`.
 - `fields[*].widget` is an optional presentational hint mirroring the `ModelAdmin` relation widgets: `radio` (`radio_fields`), `raw_id` (`raw_id_fields`), `shuttle_h` / `shuttle_v` (`filter_horizontal` / `filter_vertical`), `autocomplete` (a relation in `get_autocomplete_fields(request)` **whose target admin declares `search_fields`** — otherwise no hint), `password` / `textarea` (resolved from the bound form widget). Absent when the default control applies. (The form-spec §4.1 carries the same information in its closed `widget.kind` enum.)
 

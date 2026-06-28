@@ -17,9 +17,11 @@ from __future__ import annotations
 
 from django.contrib import admin
 from django.contrib import messages
+from django.http import HttpResponse
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.shortcuts import render
+from django.urls import path
 from django.urls import reverse
 
 from tests.test_project.jobs.models import Job
@@ -103,3 +105,44 @@ class JobAdmin(admin.ModelAdmin):
             preserved_filters=self.get_preserved_filters(request),
         )
         return render(request, "admin/jobs/job/run_custom.html", context)
+
+    # 5) get_urls() custom routes (#439). The generic twin of a consumer's
+    #    "download schema.sql" link / report page: an OBJECT-level download
+    #    (route captures ``object_id`` → surfaced on the detail response) and
+    #    a CHANGELIST-level export (no capture → surfaced on the registry).
+    #    The SPA can't render these, so it links out via ``CustomViewsMenu``.
+    def get_urls(self):  # noqa: ANN201
+        app, model = self.opts.app_label, self.opts.model_name
+        custom = [
+            path(
+                "<path:object_id>/download-report/",
+                self.admin_site.admin_view(self.download_report_view),
+                name=f"{app}_{model}_download_report",
+            ),
+            path(
+                "export-all/",
+                self.admin_site.admin_view(self.export_all_view),
+                name=f"{app}_{model}_export_all",
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def download_report_view(self, request, object_id):  # noqa: ANN001, ANN201
+        obj = self.get_object(request, object_id)
+        name = obj.name if obj else object_id
+        body = f"-- report for job {name}\nstatus,{getattr(obj, 'status', '')}\n"
+        response = HttpResponse(body, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="job-{object_id}.csv"'
+        return response
+
+    # ``short_description`` drives the SPA link label for the object-level
+    # view; the changelist ``export_all_view`` has none, so its label falls
+    # back to the humanized route name ("Export All") — both label paths are
+    # exercised by the tests.
+    download_report_view.short_description = "Download report (CSV)"  # type: ignore[attr-defined]
+
+    def export_all_view(self, request):  # noqa: ANN001, ANN201
+        body = "-- all jobs\n" + "\n".join(Job.objects.values_list("name", flat=True))
+        response = HttpResponse(body, content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="all-jobs.csv"'
+        return response

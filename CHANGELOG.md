@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-06-28
+
+### Added
+- **`get_urls()` custom views surfaced as `custom_views`** (#439). A
+  `ModelAdmin` that registers bespoke pages via `get_urls()` — a report, an
+  importer, a "download schema.sql" link — now has them surfaced as link
+  descriptors `{"name", "label", "url", "level"}`. Object-level routes (the
+  pattern captures `object_id`) appear on the **detail** response
+  (`custom_views`, reversed with the object's pk); model-wide routes appear on
+  the **registry** model entry (`custom_views`, omitted when empty). The five
+  stock CRUD routes (`change` / `add` / `changelist` / `delete` / `history`)
+  are excluded; `short_description` on the view drives the link label, else
+  the humanized route-name suffix. The package never renders the consumer's
+  template — it only surfaces the URL, so the SPA links out to the
+  legacy-admin-rendered page. A route that can't be reversed is skipped rather
+  than 500ing the endpoint. This is the producer half of the contract the
+  React `CustomViewsMenu` already consumes.
+
+### Documentation
+- **Corrected the carry-through table** for `inlines`: the write half
+  (create / edit / delete child rows via the `"inlines"` block, atomic with
+  the parent — shipped in `inlines_write.py`) was implemented but listed as
+  read-only. Added an explicit "Editable inlines (write)" section and a
+  "Custom views (`get_urls`)" section to the README; fixed the stale
+  `inlines.py` docstring and a wrong wire-contract section reference in
+  `inlines_write.py` (§5.4 → §5.1 / §5.2).
+
 ## [1.7.0] — 2026-06-02
 
 ### Added

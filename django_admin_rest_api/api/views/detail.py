@@ -37,6 +37,7 @@ from django.http import HttpResponse
 from django.http import JsonResponse
 
 from django_admin_rest_api.api.actions_meta import actions_payload
+from django_admin_rest_api.api.custom_views import custom_views_payload
 from django_admin_rest_api.api.inlines import inlines_payload
 from django_admin_rest_api.api.permissions import forbidden_response
 from django_admin_rest_api.api.permissions import is_admin_user
@@ -151,6 +152,13 @@ def _build_payload(
         # list response surfaces (`{name, label, description,
         # requires_confirmation}`).
         "object_actions": actions_payload(model_admin, request),
+        # Object-level custom views (#439): per-object pages the consumer
+        # registered via ``ModelAdmin.get_urls()`` (their route captures
+        # ``object_id``). The SPA can't render the consumer's Django template,
+        # so ``CustomViewsMenu`` links out to the legacy-admin-rendered page in
+        # a new tab. Reversed with this object's pk. Always present (``[]`` when
+        # the admin has no object-level custom routes) — contract §4.
+        "custom_views": custom_views_payload(model_admin, admin_site, level="object", obj=obj),
         # empty_value_display (#251): the admin's configured placeholder for
         # empty/null values (ModelAdmin override → AdminSite default "-"), so
         # the client renders it instead of a hardcoded em-dash. ``str()`` keeps

@@ -4,9 +4,10 @@ Wire contract: ``docs/api-contract.md`` §4.
 
 For each ``InlineModelAdmin`` declared on the parent ``ModelAdmin``,
 the detail response includes a metadata block plus the existing
-child rows. Write support (formset round-trip) is tracked as a
-follow-up — this PR closes the *read* half of #54 so the client can
-render inlines for view-only flows immediately.
+child rows (the *read* half of #54). The *write* half — creating,
+editing, and deleting child rows through the inline's real formset —
+lives in ``inlines_write.py`` and rides on the parent ``POST``/``PATCH``
+as an ``"inlines"`` block (contract §5.1 / §5.2).
 
 Hard rules (`SECURITY.md` §3):
 

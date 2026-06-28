@@ -18,6 +18,7 @@ from django.http import HttpRequest
 from django.utils.module_loading import import_string
 
 from django_admin_rest_api.api.actions_meta import actions_payload
+from django_admin_rest_api.api.custom_views import custom_views_payload
 
 
 def get_admin_site() -> AdminSite:
@@ -72,7 +73,12 @@ def _model_permissions(model_admin: ModelAdmin, request: HttpRequest) -> dict[st
     }
 
 
-def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpRequest) -> dict:
+def _model_entry(
+    model: type[Model],
+    model_admin: ModelAdmin,
+    request: HttpRequest,
+    admin_site: AdminSite,
+) -> dict:
     """Single ``models[]`` element for the registry response.
 
     Wire shape is documented in ``docs/api-contract.md`` §2. The entry
@@ -90,7 +96,7 @@ def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpReque
     ``{name, label, description, requires_confirmation}``.
     """
     meta = model._meta
-    return {
+    entry = {
         "app_label": meta.app_label,
         "model_name": meta.model_name,
         "object_name": meta.object_name,
@@ -99,6 +105,15 @@ def _model_entry(model: type[Model], model_admin: ModelAdmin, request: HttpReque
         "permissions": _model_permissions(model_admin, request),
         "actions": actions_payload(model_admin, request),
     }
+    # Changelist-level custom views (#439) — model-wide pages a consumer
+    # registered via ``get_urls()`` (a report, an importer, "download
+    # schema.sql"). Object-level views live on the detail response, not here.
+    # Omitted entirely when the admin exposes no custom routes (the common
+    # case) so the registry stays lean (contract §2).
+    changelist_views = custom_views_payload(model_admin, admin_site, level="changelist")
+    if changelist_views:
+        entry["custom_views"] = changelist_views
+    return entry
 
 
 def _user_payload(request: HttpRequest) -> dict:
@@ -207,7 +222,7 @@ def build_registry_payload(admin_site: AdminSite, request: HttpRequest) -> dict:
             # ``SECURITY.md`` §3).
             if not model_admin.has_view_permission(request):
                 continue
-            entry = _model_entry(model, model_admin, request)
+            entry = _model_entry(model, model_admin, request, admin_site)
             entry["real_app_label"] = model._meta.app_label
             entry["app_label"] = group_label
             models_payload.append(entry)

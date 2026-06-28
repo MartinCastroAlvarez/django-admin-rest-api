@@ -5,6 +5,7 @@ A complete, runnable Django project that consumes `django-admin-rest-api` with t
 - Evaluate the package before adding it to a real project.
 - See the **two-line install** in context (one `INSTALLED_APPS` entry, one `urls.py` include).
 - Verify a custom `ModelAdmin` with one `batch` and one `detail` action shows up correctly in the registry.
+- See the three "advanced admin" features wired over plain `ModelAdmin` hooks on `InvoiceAdmin`: an **editable inline** (`LineItem`), a **custom change-form view** (`?recalc=1` → `html-fragment`), and **`get_urls()` custom views** surfaced as `custom_views` links.
 
 ## Try it locally
 
@@ -40,6 +41,20 @@ target dispatch](../../docs/api-contract.md#34-actions-on-the-list--detail--regi
 
 Both go through the same `actions/<name>/` runner.
 
+It also registers `minimal_project.Invoice`, whose `InvoiceAdmin`
+demonstrates the three features a richer admin needs — all via stock
+`ModelAdmin` hooks, no package-specific API:
+
+- **Editable inline** — `LineItemInline` lets you add / edit / delete
+  child rows in the parent form; the SPA writes them back in the parent
+  `PATCH` via the [`"inlines"` block](../../docs/api-contract.md#51-post-apiv1appmodel--create).
+- **Custom change-form view** — `change_view` branches on `?recalc=1`
+  to render a non-stock template, which the form-spec endpoint serves as
+  an `html-fragment` the SPA injects in place.
+- **`get_urls()` custom views** — an object-level "Download invoice
+  (CSV)" and a changelist-level "Export all invoices", surfaced as
+  `custom_views` link descriptors on the detail / registry responses.
+
 ## File map
 
 | File                              | Why it's there |
@@ -47,8 +62,9 @@ Both go through the same `actions/<name>/` runner.
 | [`manage.py`](manage.py)          | Standard Django entrypoint. |
 | [`minimal_project/settings.py`](minimal_project/settings.py) | The two-line install — `django_admin_rest_api` in `INSTALLED_APPS`, that's it. |
 | [`minimal_project/urls.py`](minimal_project/urls.py) | One `include()` mounts the JSON API at `/admin-api/`. |
-| [`minimal_project/admin.py`](minimal_project/admin.py) | One custom `ModelAdmin` with two action shapes. |
-| [`minimal_project/models.py`](minimal_project/models.py) | Trivial `Note` model. |
+| [`minimal_project/admin.py`](minimal_project/admin.py) | `NoteAdmin` (two action shapes) + `InvoiceAdmin` (editable inline, custom change-form view, `get_urls()` custom views). |
+| [`minimal_project/models.py`](minimal_project/models.py) | `Note` + `Invoice` / `LineItem` models. |
+| [`minimal_project/templates/admin/minimal_project/invoice/recalc.html`](minimal_project/templates/admin/minimal_project/invoice/recalc.html) | The non-stock change-form template served as an `html-fragment`. |
 
 ## Next steps
 

@@ -153,6 +153,7 @@ tested), **Partial** (surfaced with a documented caveat), **Not yet**
 | `fieldsets` / `get_fieldsets` (+ classes / description) | Honored | |
 | `get_readonly_fields` | Honored | |
 | `inlines` (Stacked / Tabular) — read | Honored | FK/M2M columns select_related / prefetch_related. |
+| `inlines` (Stacked / Tabular) — **write** | Honored | Create / edit / delete child rows in the same `POST`/`PATCH` as the parent, via an `"inlines"` block routed through Django's real `BaseModelFormSet` + `save_formset` (atomic with the parent; per-inline add/change/delete permission gates). See [⚡ Editable inlines](#-editable-inlines-write). Not yet: nested inlines, generic inlines, M2M-through with extra fields. |
 | `raw_id_fields` / `radio_fields` / `filter_horizontal` / `filter_vertical` | Honored | Emitted as `widget` hints. |
 | `formfield_overrides` | Honored | Reconciled into `widget` / `type`. |
 | `save_as` / `save_on_top` / save-flow buttons | Honored | |
@@ -164,7 +165,7 @@ tested), **Partial** (surfaced with a documented caveat), **Not yet**
 | `autocomplete_fields` | Partial | Endpoint exists; a `widget:"autocomplete"` hint is emitted **only** when the target admin declares `search_fields`. Authorization is target-`has_view_permission` based (slightly broader than Django's source-relation check). |
 | `change_form_template` / `add_form_template`, overridden `change_view` / `add_view` | Honored | Rendered server-side and returned as an `html-fragment` (admin chrome stripped; inline `<script>`/`<style>` preserved) for the SPA to inject in place — no iframe. POST round-trips through `…/<pk>/change/` (redirect / re-render + captured messages). Overrides must stay GET-idempotent (see SECURITY.md). |
 | date `list_filter` range UX | Partial | Surfaced as `{type:"date"}` with exact-match; range UI deferred. |
-| `get_urls` custom views | Not yet | No generic passthrough (by design — use the SPA's own routes or an iframe). |
+| `get_urls` custom views | Honored | Surfaced as `custom_views` link descriptors (`{name, label, url, level}`) — object-level (route captures `object_id`) on the detail response, model-wide on the registry entry. The SPA can't render the consumer's template, so it links out (new tab). Stock CRUD routes are excluded; `short_description` on the view drives the label. See [🔗 Custom views](#-custom-views-get_urls). |
 | Generic inlines (`GenericTabularInline` / `GenericStackedInline`) | Not yet | Not specifically handled. |
 
 ---
@@ -272,6 +273,73 @@ callable's third parameter — its **name** (`queryset` / `obj_id` / `pk`
 Permissions stay the same (`has_change_permission` per object). No
 `django-object-actions`, no parallel declaration list, no new
 configuration.
+
+---
+
+## ⚡ Editable inlines (write)
+
+`inlines` are not just read. A create (`POST`) or update (`PATCH`) may
+carry an `"inlines"` block that creates, edits, and deletes child rows
+in the **same request** as the parent:
+
+```jsonc
+// PATCH /api/v1/<app>/<model>/<pk>/
+{
+  "fields": { "title": "Q3 invoice" },
+  "inlines": {
+    "lineitem_set": {                 // the inline's read-half name
+      "items": [
+        { "pk": 11, "fields": { "qty": 3 } },   // edit existing
+        { "pk": 12, "DELETE": true },            // delete existing
+        { "pk": null, "fields": { "sku": "A-9", "qty": 1 } }  // add new
+      ]
+    }
+  }
+}
+```
+
+Each block is routed through the inline's real Django
+`BaseModelFormSet` (`inline.get_formset(request, obj=parent)`),
+validated as a unit, and saved via `ModelAdmin.save_formset(...)` —
+never a per-row `.save()` loop. The whole thing runs **inside the same
+`transaction.atomic()` as the parent**, so a child permission denial
+(`403`) or formset validation error (`400 validation_failed` with an
+`{"inlines": …}` body) rolls the parent back too. Per-inline add /
+change / delete are gated by the inline's own `has_*_permission`.
+
+Unknown inline keys are rejected (`400`). Not yet supported: nested
+inlines, `GenericInlineModelAdmin`, and M2M-through inlines with extra
+fields.
+
+---
+
+## 🔗 Custom views (`get_urls`)
+
+A `ModelAdmin` that registers bespoke pages via `get_urls()` — a
+report, an importer, a "download schema.sql" link — has them surfaced
+as **link descriptors** so a consumer frontend can open them:
+
+```jsonc
+{
+  "name":  "billing_invoice_download_report",
+  "label": "Download report (CSV)",   // the view's short_description, else humanized
+  "url":   "/admin/billing/invoice/42/download-report/",
+  "level": "object"                    // "object" | "changelist"
+}
+```
+
+- **Object-level** views — the route captures `object_id` (Django's
+  per-object convention) — appear on the **detail** response
+  (`custom_views`), reversed with that object's pk.
+- **Changelist-level** views — no object capture — appear on the
+  **registry** model entry (`custom_views`; omitted when empty).
+
+The five stock CRUD routes (`change` / `add` / `changelist` /
+`delete` / `history`) are always excluded. The package never renders
+the consumer's Django template — it only surfaces the URL; the SPA
+links out to the legacy-admin-rendered page. A view that can't be
+reversed (extra unfillable captures) is silently skipped rather than
+500ing the endpoint.
 
 ---
 

@@ -1,6 +1,7 @@
 """Inline formset write path (Issue #54, write half — PR 2 of the split).
 
-Wire contract: ``docs/api-contract.md`` §5.4 (inline writes).
+Wire contract: ``docs/api-contract.md`` §5.1 / §5.2 (the ``"inlines"``
+block in the create / update body).
 
 The read half (#109, ``api/inlines.py``) surfaces each declared
 ``InlineModelAdmin`` and its existing rows on the detail response. This
