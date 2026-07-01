@@ -76,3 +76,45 @@ jobs:
 
       - name: pip-audit
         run: poetry run pip-audit
+
+  complyedge-trustlint:
+    name: ComplyEdge TrustLint (EU AI Act)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install TrustLint (offline compliance linter)
+        run: pip install trustlint
+
+      - name: Fetch ComplyEdge rule corpus
+        # The published `trustlint` PyPI package does not bundle the rule
+        # corpus, so pull it from the public OSS repo and pass it via
+        # --rules-dir. (Once trustlint ships the corpus as package data this
+        # step can be dropped.)
+        run: git clone --depth 1 https://github.com/ComplyEdge/ComplyEdge.git /tmp/complyedge
+
+      - name: Scan AI-facing text for EU AI Act violations
+        run: |
+          set -uo pipefail
+          RULES=/tmp/complyedge/rules/regulations
+          # Docs / prompt / system-message files describe behaviour to humans
+          # and LLMs — that's the surface an AI-Act linter cares about. Widen
+          # these globs if you add dedicated prompt or system-message files.
+          rc=0; count=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            count=$((count + 1))
+            echo "::group::trustlint check $f"
+            trustlint --rules-dir "$RULES" check --jurisdiction EU "$f" || rc=1
+            echo "::endgroup::"
+          done < <(git ls-files '*.md' '*.prompt' '*.system.md')
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::TrustLint: no AI-facing files matched — nothing to scan."
+          fi
+          [ "$rc" -eq 0 ] || echo "::error::TrustLint found EU AI Act / compliance violations (see grouped logs above)."
+          exit $rc
