@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-07-07
+
+### Fixed
+- **Visible/writable field sets now derive from `flatten_fieldsets(get_fieldsets(request, obj))`
+  — exactly what Django's own change view renders — instead of `get_fields()`.**
+  A `ModelAdmin` whose `fields` attribute diverges from its fieldsets (e.g. a
+  consumer decorator that swaps display-method names into `fields` while
+  `get_fieldsets` keeps returning the raw editable names) was editable in the
+  HTML admin yet this API rejected the same write with `Unknown field` and the
+  form-spec rendered the field as a readonly display chip. Stock `get_fieldsets`
+  falls back to `get_fields`, so admins without a fieldsets override are
+  byte-identical. Affects `writes.writable_field_names` and the detail/form-spec
+  visible set. 4 regression tests.
+
 ## [1.8.0] — 2026-06-28
 
 ### Added

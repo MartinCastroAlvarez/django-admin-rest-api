@@ -23,6 +23,7 @@ from typing import Any
 from typing import Final
 
 from django.contrib.admin.options import ModelAdmin
+from django.contrib.admin.utils import flatten_fieldsets
 from django.contrib.admin.utils import label_for_field
 from django.contrib.admin.utils import lookup_field
 from django.db.models import FileField
@@ -215,8 +216,16 @@ def _visible_field_names(
     name matching the sensitive denylist. The *writable* set (for
     POST/PATCH) lives in ``writes.writable_field_names`` and is
     narrower.
+
+    Derived from ``flatten_fieldsets(get_fieldsets(request, obj))`` —
+    the exact list Django's change view renders — not ``get_fields``:
+    stock ``get_fieldsets`` falls back to ``get_fields`` so plain
+    admins are unchanged, but an admin whose ``fields`` attribute
+    diverges from its fieldsets (e.g. a decorator swapping display
+    methods into ``fields``) must surface what the HTML admin actually
+    shows, or the two surfaces silently disagree.
     """
-    declared = list(model_admin.get_fields(request, obj) or ())
+    declared = list(flatten_fieldsets(model_admin.get_fieldsets(request, obj)) or ())
     excluded = set(model_admin.get_exclude(request, obj) or ())
     visible = [
         name

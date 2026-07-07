@@ -38,6 +38,7 @@ import json
 from typing import Any
 
 from django.contrib.admin.options import ModelAdmin
+from django.contrib.admin.utils import flatten_fieldsets
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -228,16 +229,28 @@ def writable_field_names(
 ) -> list[str]:
     """Field names the API will accept in a create or update payload.
 
-    Computed as ``get_fields`` minus ``get_exclude`` minus
+    Computed as the admin's RENDERED field list — ``flatten_fieldsets(
+    get_fieldsets(request, obj))``, exactly what Django's own
+    ``_changeform_view`` feeds ``get_form`` — minus ``get_exclude`` minus
     ``get_readonly_fields`` minus the sensitive-name denylist
     (``docs/api-contract.md`` §5) minus ``ManyToManyField``
     (unsupported in v1 per ``docs/api-contract.md`` §4).
+
+    ``get_fieldsets`` (not ``get_fields``) is the load-bearing choice:
+    Django's stock ``get_fieldsets`` falls back to ``get_fields`` so
+    plain admins are unchanged, but an admin that overrides
+    ``get_fieldsets`` (or whose ``fields`` attribute diverges from its
+    fieldsets — e.g. a decorator that swaps display methods into
+    ``fields``) renders its FORM from the fieldsets. Deriving the
+    writable set from ``get_fields`` made such fields editable in the
+    HTML admin yet rejected as ``Unknown field`` through this API —
+    breaking the "same ModelAdmin, same behavior" contract.
 
     Defense-in-depth: even if a ``ModelAdmin`` author forgets to
     ``exclude`` a sensitive-named field, the substring match keeps
     it out of the writable set.
     """
-    declared = list(model_admin.get_fields(request, obj) or ())
+    declared = list(flatten_fieldsets(model_admin.get_fieldsets(request, obj)) or ())
     excluded = set(model_admin.get_exclude(request, obj) or ())
     readonly = set(model_admin.get_readonly_fields(request, obj) or ())
     out: list[str] = []
