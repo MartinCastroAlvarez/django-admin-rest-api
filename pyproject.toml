@@ -39,6 +39,12 @@ python = "^3.10"
 django = ">=4.2,<7.0"
 
 [tool.poetry.group.dev.dependencies]
+# pip-audit pulls filelock via cachecontrol; 4.2.1 fixes six CVEs but needs Python 3.11+,
+# so the 3.10 lane keeps the older one (dev tooling only, never shipped).
+filelock = [
+    { version = ">=4.2.1", python = ">=3.11" },
+    { version = ">=3.8.0", python = "<3.11" },
+]
 pytest = "^9.0.3"
 pytest-django = "^4.8"
 pytest-cov = "^5.0"
