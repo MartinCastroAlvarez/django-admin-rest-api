@@ -21,7 +21,9 @@ It is the wire surface that lets these projects drive your admin:
 | --- | --- | --- |
 | 🟦 [`django-admin-react`](https://github.com/MartinCastroAlvarez/django-admin-react) | React single-page admin frontend | [`django-admin-react`](https://pypi.org/project/django-admin-react/) |
 | 🟩 **`django-admin-rest-api`** *(this repo)* | JSON REST API over `ModelAdmin` | [`django-admin-rest-api`](https://pypi.org/project/django-admin-rest-api/) |
-| 🟪 [`django-admin-mcp`](https://github.com/MartinCastroAlvarez/django-admin-mcp) | MCP server exposing the same API to LLMs | *(coming soon)* |
+| 🟪 [`django-admin-mcp-api`](https://github.com/MartinCastroAlvarez/django-admin-mcp-api) | MCP server exposing the same API to LLMs | [`django-admin-mcp-api`](https://pypi.org/project/django-admin-mcp-api/) |
+| 🟧 [`django-admin-graph`](https://github.com/MartinCastroAlvarez/django-admin-graph) | The admin site as a typed, versioned graph | *(coming soon)* |
+| 🟥 [`django-admin-skills`](https://github.com/MartinCastroAlvarez/django-admin-skills) | Agent Skills (`SKILL.md`) for Claude Code / Codex generated from the graph | *(coming soon)* |
 
 ---
 
